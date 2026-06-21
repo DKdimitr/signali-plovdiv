@@ -88,33 +88,58 @@ export default async function handler(request, response) {
 
     const structuredData = JSON.parse(responseText);
 
-    // Запис в базата данни на Supabase
-    const { data, error } = await supabase
-      .from('signals')
-      .insert([
-        { 
-          citizen_name: citizenName,
-          citizen_phone: citizenPhone || null,
-          citizen_email: citizenEmail,
-          raw_description: rawDescription, 
-          image_url: imageUrl || null,
-          corrected_text: structuredData.corrected_text,
-          location: structuredData.location,
-          assigned_institution: structuredData.assigned_institution,
-          priority: ['Low', 'Medium', 'High'].includes(structuredData.priority) ? structuredData.priority : 'Medium',
-          official_letter: structuredData.official_letter,
-          status: 'Подаден'
-        }
-      ])
-      .select();
+   // ==========================================
+    // ДИРЕКТЕН И СИГУРЕН ЗАПИС В SUPABASE ЧРЕЗ HTTP REST API
+    // ==========================================
+    try {
+      const supabaseUrl = process.env.SUPABASE_URL.replace(/\/$/, ""); 
+      const supabaseKey = process.env.SUPABASE_ANON_KEY;
+      
+      const payload = { 
+        citizen_name: citizenName,
+        citizen_phone: citizenPhone || null,
+        citizen_email: citizenEmail,
+        raw_description: rawDescription, 
+        image_url: imageUrl || null,
+        corrected_text: structuredData.corrected_text,
+        location: structuredData.location,
+        assigned_institution: structuredData.assigned_institution,
+        priority: ['Low', 'Medium', 'High'].includes(structuredData.priority) ? structuredData.priority : 'Medium',
+        official_letter: structuredData.official_letter,
+        status: 'Подаден'
+      };
 
-    if (error) throw new Error(error.message);
+      console.log("Опит за директна HTTP заявка към:", `${supabaseUrl}/rest/v1/signals`);
 
-    return response.status(200).json({ success: true, data: data[0] });
+      const supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/signals`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(payload)
+      });
 
+      if (!supabaseResponse.ok) {
+        const errorText = await supabaseResponse.text();
+        console.error("Supabase API върна грешка:", supabaseResponse.status, errorText);
+        throw new Error(`Supabase HTTP Error ${supabaseResponse.status}: ${errorText}`);
+      }
+
+      const insertedData = await supabaseResponse.json();
+      return response.status(200).json({ success: true, data: insertedData[0] });
+
+    } catch (supabaseRestError) {
+      console.error('ПОДРОБНА ДИАГНОСТИКА НА МРЕЖАТА:', {
+        message: supabaseRestError.message,
+        stack: supabaseRestError.stack,
+        cause: supabaseRestError.cause
+      });
+      throw new Error(`Проблем с базата данни: ${supabaseRestError.message}`);
+    }
   } catch (err) {
     console.error('Критична грешка в ИИ Модула:', err);
-    // Връщаме по-информативно съобщение в лога, за да знаем ако все пак нещо друго се счупи
     return response.status(500).json({ success: false, error: err.message || 'Вътрешна системна грешка.' });
   }
-}
