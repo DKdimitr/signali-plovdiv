@@ -30,7 +30,7 @@ export default async function handler(request, response) {
 
   try {
     const body = await getRequestBody(request);
-    const { citizenName, citizenPhone, citizenEmail, rawDescription, imageUrl } = body;
+    const { citizenName, citizenPhone, citizenEmail, rawDescription, imageUrl, latitude, longitude } = body;
 
     if (!citizenName || !citizenEmail || !rawDescription) {
       return response.status(400).json({ error: 'Име, имейл и описание са задължителни по АПК.' });
@@ -103,7 +103,9 @@ export default async function handler(request, response) {
         assigned_institution: structuredData.assigned_institution,
         priority: ['Low', 'Medium', 'High'].includes(structuredData.priority) ? structuredData.priority : 'Medium',
         official_letter: structuredData.official_letter,
-        status: 'Подаден'
+        status: 'Подаден',
+        latitude: latitude || null,
+        longitude: longitude || null
       };
 
       console.log("Опит за директна HTTP заявка към:", `${supabaseUrl}/rest/v1/signals`);
