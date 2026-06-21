@@ -5,14 +5,36 @@ import { GoogleGenAI } from '@google/generative-ai';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+// Хелпър функция за четене на стрийм тялото в чист Node.js във Vercel
+async function getRequestBody(req) {
+  if (req.body) return req.body; // Ако Vercel го е парснал автоматично
+  
+  const buffers = [];
+  for await (const chunk of req) {
+    buffers.push(chunk);
+  }
+  const data = Buffer.concat(buffers).toString();
+  return JSON.parse(data);
+}
+
 export default async function handler(request, response) {
-  // Позволяваме само POST заявки за сигурност
+  // Настройки за CORS, за да може фронтендът да комуникира свободно с API-то
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (request.method === 'OPTIONS') {
+    return response.status(200).end();
+  }
+
   if (request.method !== 'POST') {
     return response.status(405).json({ error: 'Методът не е разрешен. Използвайте POST.' });
   }
 
   try {
-    const { citizenName, citizenPhone, citizenEmail, rawDescription, imageUrl } = request.body;
+    // Безопасно парсване на JSON тялото
+    const body = await getRequestBody(request);
+    const { citizenName, citizenPhone, citizenEmail, rawDescription, imageUrl } = body;
 
     if (!citizenName || !citizenEmail || !rawDescription) {
       return response.status(400).json({ error: 'Име, имейл и описание са задължителни по АПК.' });
