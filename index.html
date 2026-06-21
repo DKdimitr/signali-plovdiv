@@ -4,14 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Сигнали Пловдив - Подобри своя град</title>
-    <!-- Tailwind CSS за модерен и бърз дизайн -->
+    <!-- Tailwind CSS за модерен дизайн -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Leaflet.js за интерактивната карта (0.00 лв) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body {
-            background-color: #f8fafc;
-        }
+        body { background-color: #f8fafc; }
         .plovdiv-blue { background-color: #1e3a8a; }
         .plovdiv-gold { background-color: #d97706; }
+        #map { z-index: 1; }
     </style>
 </head>
 <body class="font-sans antialiased text-gray-900">
@@ -28,85 +30,110 @@
     </header>
 
     <!-- Основно съдържание -->
-    <main class="max-w-3xl mx-auto px-4 py-8">
+    <main class="max-w-4xl mx-auto px-4 py-8 space-y-8">
         
         <!-- Приветствено съобщение -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-8 text-center sm:text-left">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center sm:text-left">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">Помогни на Пловдив да стане по-чист и безопасен</h2>
-            <p class="text-gray-600">Подай сигнал за преливащи контейнери, дупки по улиците или неокосена трева. Нашият изкуствен интелект (Gemini AI) автоматично ще го обработи, коригира и насочи към правилното общинско предприятие.</p>
+            <p class="text-gray-600">Подай сигнал за преливащи контейнери, дупки или неокосена трева. Нашият изкуствен интелект (Gemini AI) автоматично ще го обработи, оформи по АПК и насочи към правилната общинска институция.</p>
         </div>
 
-        <!-- Форма за сигнал -->
-        <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-md border border-gray-100">
-            <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
-                <span class="mr-2">📝</span> Нова декларация на проблем
+        <!-- КАРТА НА ЖИВО (Интеграция от PoC) -->
+        <div class="bg-white rounded-2xl p-6 shadow-md border border-gray-100">
+            <h3 class="text-xl font-bold text-gray-800 mb-2 flex items-center">
+                <span class="mr-2">🗺️</span> Карта на сигналите в реално време
             </h3>
+            <p class="text-xs text-gray-500 mb-4">Кликнете върху картата, за да посочите точната локация на проблема при попълване на формата.</p>
+            <div id="map" class="h-96 w-full rounded-xl border border-gray-200 shadow-inner"></div>
+        </div>
 
-            <form id="signalForm" class="space-y-6">
-                
-                <!-- Секция: Лични данни (Правна легитимност по АПК) -->
-                <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 space-y-4">
-                    <h4 class="text-sm font-semibold text-blue-900 uppercase tracking-wider">Данни за подателя (Изискване по АПК)</h4>
+        <!-- ДВЕ КОЛОНИ: Проследяване и Форма -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            
+            <!-- ЛЯВА КОЛОНА: Проследяване на сигнал (1/3 широчина) -->
+            <div class="space-y-6 md:col-span-1">
+                <div class="bg-amber-50 rounded-2xl p-6 shadow-sm border border-amber-200/60">
+                    <h3 class="text-lg font-bold text-amber-900 mb-3 flex items-center">
+                        <span class="mr-2">🔍</span> Следене на сигнал
+                    </h3>
+                    <p class="text-xs text-amber-800 mb-4">Въведете получения номер на сигнал, за да проверите неговия статус по АПК в реално време.</p>
+                    <div class="space-y-3">
+                        <input type="number" id="searchSignalId" placeholder="напр. 2" 
+                               class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:ring-2 focus:ring-blue-500">
+                        <button onclick="trackSignal()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded-lg text-sm shadow transition">
+                            Провери статус
+                        </button>
+                    </div>
+                    <!-- Резултат от търсенето -->
+                    <div id="trackResult" class="hidden mt-4 p-3 bg-white rounded-lg border border-amber-200 text-xs text-gray-700 space-y-1"></div>
+                </div>
+            </div>
+
+            <!-- ДЯСНА КОЛОНА: Форма за сигнал (2/3 широчина) -->
+            <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-md border border-gray-100 md:col-span-2">
+                <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                    <span class="mr-2">📝</span> Нова декларация на проблем
+                </h3>
+
+                <form id="signalForm" class="space-y-6">
+                    <!-- Скрити полета за гео-координати от картата -->
+                    <input type="hidden" id="latitude">
+                    <input type="hidden" id="longitude">
                     
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Две или три имена *</label>
-                        <input type="text" id="citizenName" required placeholder="напр. Димитър Колев"
-                            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm">
+                    <!-- Данни за подателя -->
+                    <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 space-y-4">
+                        <h4 class="text-sm font-semibold text-blue-900 uppercase tracking-wider">Данни за подателя (АПК изискване)</h4>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Две или три имена *</label>
+                            <input type="text" id="citizenName" required placeholder="напр. Димитър Колев"
+                                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white transition shadow-sm">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Имейл *</label>
+                                <input type="email" id="citizenEmail" required placeholder="yourname@example.com"
+                                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white transition shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Телефон</label>
+                                <input type="tel" id="citizenPhone" placeholder="напр. 0888123456"
+                                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white transition shadow-sm">
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Описание -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Описание на ситуацията</h4>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Имейл за обратна връзка *</label>
-                            <input type="email" id="citizenEmail" required placeholder="yourname@example.com"
-                                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Какво забелязахте? *</label>
+                            <textarea id="rawDescription" required rows="4" 
+                                placeholder="Опишете проблема и къде се намира... (напр. Преливащи кофи на ул. Димитър Талев)"
+                                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white transition shadow-sm"></textarea>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Телефон за връзка</label>
-                            <input type="tel" id="citizenPhone" placeholder="напр. 0888123456"
-                                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Линк към снимка</label>
+                            <input type="url" id="imageUrl" placeholder="https://example.com/snimka.jpg"
+                                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white transition shadow-sm">
+                        </div>
+                        <div id="locationBadge" class="hidden text-xs bg-emerald-100 text-emerald-800 p-2.5 rounded-lg font-medium">📍 Маркирахте локация върху картата!</div>
+                    </div>
+
+                    <!-- GDPR -->
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5"><input id="gdpr" type="checkbox" required class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"></div>
+                        <div class="ml-3 text-sm">
+                            <label for="gdpr" class="font-medium text-gray-700">Съгласен съм с обработката на данните ми</label>
+                            <p class="text-gray-500 text-xs">Данните се обработват съгласно изискванията на АПК и GDPR единствено за нуждите на Община Пловдив.</p>
                         </div>
                     </div>
-                </div>
 
-                <!-- Секция: Самият сигнал -->
-                <div class="space-y-4">
-                    <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Описание на ситуацията</h4>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Какво забелязахте? *</label>
-                        <textarea id="rawDescription" required rows="4" 
-                            placeholder="Опишете проблема със собствени думи... (напр. Преливащи кофи за смет в Кючука на ул. Димитър Талев)"
-                            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm"></textarea>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Линк към снимка (опционално)</label>
-                        <input type="url" id="imageUrl" placeholder="https://example.com/snimka.jpg"
-                            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm">
-                        <p class="text-xs text-gray-500 mt-1">💡 Съвет: Снимковият материал ускорява реакцията на общинските инспектори с над 80%.</p>
-                    </div>
-                </div>
-
-                <!-- GDPR Съгласие -->
-                <div class="flex items-start mt-2">
-                    <div class="flex items-center h-5">
-                        <input id="gdpr" type="checkbox" required class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-                    </div>
-                    <div class="ml-3 text-sm">
-                        <label for="gdpr" class="font-medium text-gray-700">Съгласен съм с обработката на личните ми данни</label>
-                        <p class="text-gray-500 text-xs">Данните се събират единствено за легитимиране на сигнала пред структурите на Община Пловдив съгласно изискванията на АПК и GDPR.</p>
-                    </div>
-                </div>
-
-                <!-- Бутон за изпращане -->
-                <div>
-                    <button type="submit" 
-                        class="w-full plovdiv-blue hover:bg-blue-900 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition duration-150 active:scale-[0.98] flex justify-center items-center space-x-2 text-lg cursor-pointer">
+                    <!-- Бутон -->
+                    <button type="submit" class="w-full plovdiv-blue hover:bg-blue-900 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition active:scale-[0.98] flex justify-center items-center space-x-2 text-lg cursor-pointer">
                         <span>🚀 Изпрати сигнал към AI Агента</span>
                     </button>
-                </div>
-
-            </form>
+                </form>
+            </div>
         </div>
     </main>
 
@@ -114,110 +141,152 @@
     <footer class="bg-gray-800 text-gray-400 py-6 mt-12 border-t border-gray-700">
         <div class="max-w-4xl mx-auto px-4 text-center text-xs space-y-2">
             <p>© 2026 Сигнали Пловдив. Всички права запазени.</p>
-            <p>Проектът е с отворен код с цел подобряване на градската среда чрез иновации.</p>
         </div>
     </footer>
-<script>
-        document.getElementById('signalForm').addEventListener('submit', async function(event) {
-            event.preventDefault(); // Спира презареждането на страницата
 
-            // 1. Вземане на бутона за визуална обратна връзка (Loading state)
-            const submitButton = this.querySelector('button[type="submit"]');
-            const originalButtonText = submitButton.innerHTML;
-            
-            // Промяна на състоянието на бутона при изпращане
-            submitButton.disabled = true;
-            submitButton.innerHTML = `<span>⏳ AI обработва сигнала... Моля, изчакайте</span>`;
-
-            // 2. Събиране на данните от формата
-            const formData = {
-                citizenName: document.getElementById('citizenName').value.trim(),
-                citizenEmail: document.getElementById('citizenEmail').value.trim(),
-                citizenPhone: document.getElementById('citizenPhone').value.trim() || null,
-                rawDescription: document.getElementById('rawDescription').value.trim(),
-                imageUrl: document.getElementById('imageUrl').value.trim() || null
-            };
-
-            try {
-                // 3. Изпращане на POST заявка към безсървърния API маршрут
-                const response = await fetch('/api/signals', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    // Успешно записване в Supabase + AI обработка
-                    alert(`🎉 Успех! Сигналът Ви е регистриран.\n\n🆔 Номер в системата: ${result.data.id}\n🏢 Насочен към: ${result.data.assigned_institution}\n🚨 Приоритет: ${result.data.priority}`);
-                    this.reset(); // Изчистване на формата при успех
-                } else {
-                    // Грешка върната от нашия сървър (напр. невалидни данни или проблем с Gemini)
-                    alert(`❌ Грешка при обработка: ${result.error || 'Възникна неочакван проблем.'}`);
-                }
-            } catch (error) {
-                // Мрежова грешка (няма връзка със сървъра)
-                console.error('Грешка при комуникация с API:', error);
-                alert('❌ Срив в мрежата. Моля, проверете връзката си и опитайте отново.');
-            } finally {
-                // Възстановяване на първоначалното състояние на бутона
-                submitButton.disabled = false;
-                submitButton.innerHTML = originalButtonText;
-            }
-        });
-    </script>
+    <!-- Скриптове за Карта и Логика -->
     <script>
-        document.getElementById('signalForm').addEventListener('submit', async function(event) {
-            event.preventDefault(); // Спира презареждането на страницата
+        // Инициализиране на картата над Пловдив
+        const map = L.map('map').setView([42.14492, 24.75032], 13);
+        
+        // Зареждане на безплатната OSM карта
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-            // 1. Вземане на бутона за визуална обратна връзка
+        let userMarker = null;
+
+        // Позволяваме на потребителя да маркира мястото на инцидента
+        map.on('click', function(e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+            
+            document.getElementById('latitude').value = lat;
+            document.getElementById('longitude').value = lng;
+            document.getElementById('locationBadge').classList.remove('hidden');
+
+            if (userMarker) {
+                userMarker.setLatLng(e.latlng);
+            } else {
+                userMarker = L.marker(e.latlng, {draggable: true}).addTo(map).bindPopup("Място на сигнала").openPopup();
+                userMarker.on('moveend', function(ev) {
+                    const pos = ev.target.getLatLng();
+                    document.getElementById('latitude').value = pos.lat;
+                    document.getElementById('longitude').value = pos.lng;
+                });
+            }
+        });
+
+        // Функция за автоматично зареждане на всички сигнали от базата на картата
+        async function loadPublicSignals() {
+            try {
+                const res = await fetch('/api/get-signals');
+                const result = await res.json();
+                if (result.success) {
+                    result.data.forEach(signal => {
+                        if (signal.latitude && signal.longitude) {
+                            // Цветна икона или базов маркер според институцията/статуса
+                            const marker = L.marker([signal.latitude, signal.longitude]).addTo(map);
+                            marker.bindPopup(`
+                                <div class="space-y-1 font-sans text-xs">
+                                    <div class="font-bold text-blue-900">Сигнал №${signal.id}</div>
+                                    <div><b>Насочен към:</b> ${signal.assigned_institution}</div>
+                                    <div><b>Приоритет:</b> ${signal.priority}</div>
+                                    <div class="mt-1 px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-center font-bold">Статус: ${signal.status}</div>
+                                </div>
+                            `);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("Грешка при зареждане на маркерите на картата:", err);
+            }
+        }
+
+        // Извикване на функцията при отваряне на страницата
+        loadPublicSignals();
+
+        // ФОРМА: Изпращане на сигнал
+        document.getElementById('signalForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
             const submitButton = this.querySelector('button[type="submit"]');
             const originalButtonText = submitButton.innerHTML;
             
-            // Сменяме текста на бутона, за да знае гражданинът, че ИИ работи в момента
             submitButton.disabled = true;
-            submitButton.innerHTML = `<span>⏳ AI „Супер-Мозък“ анализира и оформя сигнала...</span>`;
+            submitButton.innerHTML = `<span>⏳ AI „Супер-Мозък“ оформя сигнала по АПК...</span>`;
 
-            // 2. Събиране на данните от формата (точно по полетата в HTML)
             const formData = {
                 citizenName: document.getElementById('citizenName').value.trim(),
                 citizenEmail: document.getElementById('citizenEmail').value.trim(),
                 citizenPhone: document.getElementById('citizenPhone').value.trim() || null,
                 rawDescription: document.getElementById('rawDescription').value.trim(),
-                imageUrl: document.getElementById('imageUrl').value.trim() || null
+                imageUrl: document.getElementById('imageUrl').value.trim() || null,
+                latitude: document.getElementById('latitude').value ? parseFloat(document.getElementById('latitude').value) : null,
+                longitude: document.getElementById('longitude').value ? parseFloat(document.getElementById('longitude').value) : null
             };
 
             try {
-                // 3. Изпращане на POST заявка към безсървърната ни функция
                 const response = await fetch('/api/signals', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    // Успех! Извеждаме информация за обработения от ИИ сигнал
-                    alert(`🎉 Успех! Сигналът е обработен и записан по АПК.\n\n🆔 Номер: ${result.data.id}\n🏢 Институция: ${result.data.assigned_institution}\n🚨 Приоритет: ${result.data.priority}`);
-                    this.reset(); // Изчистване на формата
+                    alert(`🎉 Успех! Сигналът е записан по АПК.\n\n🆔 Номер за проследяване: ${result.data.id}\n🏢 Институция: ${result.data.assigned_institution}`);
+                    this.reset();
+                    if(userMarker) { map.removeLayer(userMarker); userMarker = null; }
+                    document.getElementById('locationBadge').classList.add('hidden');
+                    loadPublicSignals(); // Презареждаме картата
                 } else {
-                    alert(`❌ Грешка: ${result.error || 'Възникна проблем при обработката.'}`);
+                    alert(`❌ Грешка: ${result.error || 'Възникна проблем.'}`);
                 }
             } catch (error) {
-                console.error('Мрежова грешка:', error);
-                alert('❌ Срив в мрежата. Моля, проверете връзката си.');
+                alert('❌ Срив в мрежата. Моля, опитайте отново.');
             } finally {
-                // Възстановяване на бутона
                 submitButton.disabled = false;
                 submitButton.innerHTML = originalButtonText;
             }
         });
+
+        // ФУНКЦИЯ: Проследяване на индивидуален статус по ID
+        async function trackSignal() {
+            const idInput = document.getElementById('searchSignalId').value.trim();
+            const resultDiv = document.getElementById('trackResult');
+            
+            if(!idInput) { alert("Моля, въведете номер на сигнал."); return; }
+
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = "⏳ Проверка в регистрите...";
+
+            try {
+                const res = await fetch(`/api/get-signals`);
+                const result = await res.json();
+                
+                if (result.success) {
+                    // Търсим конкретния сигнал по неговото ID
+                    const found = result.data.find(s => s.id == idInput);
+                    if(found) {
+                        resultDiv.innerHTML = `
+                            <div class="font-bold border-b pb-1 mb-1 text-blue-900">Резултат за №${found.id}:</div>
+                            <div><b>Статус:</b> <span class="bg-blue-100 text-blue-800 px-1 rounded font-bold">${found.status}</span></div>
+                            <div><b>Институция:</b> ${found.assigned_institution}</div>
+                            <div><b>Приоритет:</b> ${found.priority}</div>
+                            <div class="text-gray-500 mt-1 italic">Подаден на: ${new Date(found.created_at).toLocaleDateString('bg-BG')}</div>
+                        `;
+                    } else {
+                        resultDiv.innerHTML = `❌ <span class="text-red-600">Сигнал с №${idInput} не бе намерен в системата на Пловдив.</span>`;
+                    }
+                } else {
+                    resultDiv.innerHTML = "❌ Грешка при връзка с базата.";
+                }
+            } catch(err) {
+                resultDiv.innerHTML = "❌ Грешка при мрежова заявка.";
+            }
+        }
     </script>
 </body>
 </html>
