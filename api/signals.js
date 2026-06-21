@@ -2,7 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Инициализираме AI извън handler-а (той няма проблем с това)
+// Инициализираме AI извън handler-а
 const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function getRequestBody(req) {
@@ -36,12 +36,9 @@ export default async function handler(request, response) {
       return response.status(400).json({ error: 'Име, имейл и описание са задължителни по АПК.' });
     }
 
-    // СТАРШИ ПОДХОД: Инициализация на Supabase ВЪТРЕ в handler-а,
-    // за да сме 100% сигурни, че process.env е зареден и наличен.
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
       throw new Error("Липсват конфигурационни ключове за Supabase във Vercel.");
     }
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
     // Инициализираме модела със строги системни инструкции
     const model = ai.getGenerativeModel({ 
@@ -88,7 +85,7 @@ export default async function handler(request, response) {
 
     const structuredData = JSON.parse(responseText);
 
-   // ==========================================
+    // ==========================================
     // ДИРЕКТЕН И СИГУРЕН ЗАПИС В SUPABASE ЧРЕЗ HTTP REST API
     // ==========================================
     try {
@@ -139,7 +136,9 @@ export default async function handler(request, response) {
       });
       throw new Error(`Проблем с базата данни: ${supabaseRestError.message}`);
     }
+
   } catch (err) {
     console.error('Критична грешка в ИИ Модула:', err);
     return response.status(500).json({ success: false, error: err.message || 'Вътрешна системна грешка.' });
   }
+}
