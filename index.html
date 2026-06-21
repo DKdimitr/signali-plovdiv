@@ -117,6 +117,57 @@
             <p>Проектът е с отворен код с цел подобряване на градската среда чрез иновации.</p>
         </div>
     </footer>
+<script>
+        document.getElementById('signalForm').addEventListener('submit', async function(event) {
+            event.preventDefault(); // Спира презареждането на страницата
 
+            // 1. Вземане на бутона за визуална обратна връзка (Loading state)
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            
+            // Промяна на състоянието на бутона при изпращане
+            submitButton.disabled = true;
+            submitButton.innerHTML = `<span>⏳ AI обработва сигнала... Моля, изчакайте</span>`;
+
+            // 2. Събиране на данните от формата
+            const formData = {
+                citizenName: document.getElementById('citizenName').value.trim(),
+                citizenEmail: document.getElementById('citizenEmail').value.trim(),
+                citizenPhone: document.getElementById('citizenPhone').value.trim() || null,
+                rawDescription: document.getElementById('rawDescription').value.trim(),
+                imageUrl: document.getElementById('imageUrl').value.trim() || null
+            };
+
+            try {
+                // 3. Изпращане на POST заявка към безсървърния API маршрут
+                const response = await fetch('/api/signals', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // Успешно записване в Supabase + AI обработка
+                    alert(`🎉 Успех! Сигналът Ви е регистриран.\n\n🆔 Номер в системата: ${result.data.id}\n🏢 Насочен към: ${result.data.assigned_institution}\n🚨 Приоритет: ${result.data.priority}`);
+                    this.reset(); // Изчистване на формата при успех
+                } else {
+                    // Грешка върната от нашия сървър (напр. невалидни данни или проблем с Gemini)
+                    alert(`❌ Грешка при обработка: ${result.error || 'Възникна неочакван проблем.'}`);
+                }
+            } catch (error) {
+                // Мрежова грешка (няма връзка със сървъра)
+                console.error('Грешка при комуникация с API:', error);
+                alert('❌ Срив в мрежата. Моля, проверете връзката си и опитайте отново.');
+            } finally {
+                // Възстановяване на първоначалното състояние на бутона
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            }
+        });
+    </script>
 </body>
 </html>
