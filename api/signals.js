@@ -2,7 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+// Инициализираме AI извън handler-а (той няма проблем с това)
 const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function getRequestBody(req) {
@@ -36,19 +36,25 @@ export default async function handler(request, response) {
       return response.status(400).json({ error: 'Име, имейл и описание са задължителни по АПК.' });
     }
 
-    // Инициализираме модела със строги системни инструкции за неговата роля
+    // СТАРШИ ПОДХОД: Инициализация на Supabase ВЪТРЕ в handler-а,
+    // за да сме 100% сигурни, че process.env е зареден и наличен.
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      throw new Error("Липсват конфигурационни ключове за Supabase във Vercel.");
+    }
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+    // Инициализираме модела със строги системни инструкции
     const model = ai.getGenerativeModel({ 
       model: "gemini-2.5-flash",
       systemInstruction: `Ти си висш административен изкуствен интелект към Гражданския инкубатор на град Пловдив. 
 Твоята задача е да поемеш суров сигнал от гражданин и да преминеш през три вътрешни роли, преди да върнеш финалния отговор:
 1. РЕЦЕПЦИОНИСТ: Анализираш текста, изчистваш вулгарния език (ако има такъв) и коригираш правописните и пунктуационни грешки, запазвайки оригиналния смисъл.
 2. АДМИНИСТРАТОР: Извличаш точния адрес в Пловдив, определяш приоритета (Low, Medium, High) и избираш най-подходящата отговорна институция.
-3. ПРАВЕН СЪТРУДНИК: Оформяш официално структурирано писмо съгласно изискванията на Административнопроцесуалния кодекс (АПК) на Република България.
+3. ПРАВЕН СЪТРУДНИК: Оформяш официално структурирано писмо съгласно изискванията на Административнопроцесуарния кодекс (АПК) на Република България.
 
 Връщай ЕДИНСТВЕНО валиден JSON обект. Без markdown обвивки (без трите кавички \`\`\`json).`,
     });
 
-    // Изграждаме подробен prompt, който дефинира задачите на Супер-Мозъка
     const prompt = `Изпълни следните стъпки за обработка на сигнала последователно:
 
 СТЪПКА 1 (Корекция): Коригирай правописа, граматиката и стилистиката на следния текст на български език: "${rawDescription}". Превърни го в културно, ясно и добре структурирано описание.
@@ -64,10 +70,6 @@ export default async function handler(request, response) {
 - Текст, който официално, сериозно и аргументирано излага проблема и призовава за проверка на място и последващи действия.
 - Официален завършек ("С уважение...").
 
-Данни за подателя:
-Име: ${citizenName}
-Имейл: ${citizenEmail}
-
 Върни резултата СТРИКТНО като JSON обект със следните полета (и нищо друго):
 {
   "corrected_text": "коригираният текст от стъпка 1",
@@ -80,7 +82,6 @@ export default async function handler(request, response) {
     const aiResponse = await model.generateContent(prompt);
     let responseText = aiResponse.response.text().trim();
     
-    // Дефанзивна защита срещу евентуално markdown форматиране
     if (responseText.startsWith("```")) {
       responseText = responseText.replace(/^```json|```$/g, "").trim();
     }
@@ -113,6 +114,7 @@ export default async function handler(request, response) {
 
   } catch (err) {
     console.error('Критична грешка в ИИ Модула:', err);
-    return response.status(500).json({ success: false, error: 'ИИ не успя да структурира сигнала. Опитайте пак.' });
+    // Връщаме по-информативно съобщение в лога, за да знаем ако все пак нещо друго се счупи
+    return response.status(500).json({ success: false, error: err.message || 'Вътрешна системна грешка.' });
   }
 }
