@@ -169,5 +169,55 @@
             }
         });
     </script>
+    <script>
+        document.getElementById('signalForm').addEventListener('submit', async function(event) {
+            event.preventDefault(); // Спира презареждането на страницата
+
+            // 1. Вземане на бутона за визуална обратна връзка
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            
+            // Сменяме текста на бутона, за да знае гражданинът, че ИИ работи в момента
+            submitButton.disabled = true;
+            submitButton.innerHTML = `<span>⏳ AI „Супер-Мозък“ анализира и оформя сигнала...</span>`;
+
+            // 2. Събиране на данните от формата (точно по полетата в HTML)
+            const formData = {
+                citizenName: document.getElementById('citizenName').value.trim(),
+                citizenEmail: document.getElementById('citizenEmail').value.trim(),
+                citizenPhone: document.getElementById('citizenPhone').value.trim() || null,
+                rawDescription: document.getElementById('rawDescription').value.trim(),
+                imageUrl: document.getElementById('imageUrl').value.trim() || null
+            };
+
+            try {
+                // 3. Изпращане на POST заявка към безсървърната ни функция
+                const response = await fetch('/api/signals', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // Успех! Извеждаме информация за обработения от ИИ сигнал
+                    alert(`🎉 Успех! Сигналът е обработен и записан по АПК.\n\n🆔 Номер: ${result.data.id}\n🏢 Институция: ${result.data.assigned_institution}\n🚨 Приоритет: ${result.data.priority}`);
+                    this.reset(); // Изчистване на формата
+                } else {
+                    alert(`❌ Грешка: ${result.error || 'Възникна проблем при обработката.'}`);
+                }
+            } catch (error) {
+                console.error('Мрежова грешка:', error);
+                alert('❌ Срив в мрежата. Моля, проверете връзката си.');
+            } finally {
+                // Възстановяване на бутона
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            }
+        });
+    </script>
 </body>
 </html>
