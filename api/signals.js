@@ -5,10 +5,8 @@ import { GoogleGenAI } from '@google/generative-ai';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Хелпър функция за четене на стрийм тялото в чист Node.js във Vercel
 async function getRequestBody(req) {
-  if (req.body) return req.body; // Ако Vercel го е парснал автоматично
-  
+  if (req.body) return req.body;
   const buffers = [];
   for await (const chunk of req) {
     buffers.push(chunk);
@@ -18,7 +16,6 @@ async function getRequestBody(req) {
 }
 
 export default async function handler(request, response) {
-  // Настройки за CORS, за да може фронтендът да комуникира свободно с API-то
   response.setHeader('Access-Control-Allow-Origin', '*');
   response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -28,11 +25,10 @@ export default async function handler(request, response) {
   }
 
   if (request.method !== 'POST') {
-    return response.status(405).json({ error: 'Методът не е разрешен. Използвайте POST.' });
+    return response.status(405).json({ error: 'Методът не е разрешен.' });
   }
 
   try {
-    // Безопасно парсване на JSON тялото
     const body = await getRequestBody(request);
     const { citizenName, citizenPhone, citizenEmail, rawDescription, imageUrl } = body;
 
@@ -40,22 +36,58 @@ export default async function handler(request, response) {
       return response.status(400).json({ error: 'Име, имейл и описание са задължителни по АПК.' });
     }
 
+    // Инициализираме модела със строги системни инструкции за неговата роля
     const model = ai.getGenerativeModel({ 
       model: "gemini-2.0-flash",
-      systemInstruction: "Ти си софтуерен модул. Връщай ЕДИНСТВЕНО валиден JSON. Без markdown (```json)." 
+      systemInstruction: `Ти си висш административен изкуствен интелект към Гражданския инкубатор на град Пловдив. 
+Твоята задача е да поемеш суров сигнал от гражданин и да преминеш през три вътрешни роли, преди да върнеш финалния отговор:
+1. РЕЦЕПЦИОНИСТ: Анализираш текста, изчистваш вулгарния език (ако има такъв) и коригираш правописните и пунктуационни грешки, запазвайки оригиналния смисъл.
+2. АДМИНИСТРАТОР: Извличаш точния адрес в Пловдив, определяш приоритета (Low, Medium, High) и избираш най-подходящата отговорна институция.
+3. ПРАВЕН СЪТРУДНИК: Оформяш официално структурирано писмо съгласно изискванията на Административнопроцесуалния кодекс (АПК) на Република България.
+
+Връщай ЕДИНСТВЕНО валиден JSON обект. Без markdown обвивки (без трите кавички \`\`\`json).`,
     });
 
-    const prompt = `Анализирай сигнал за Пловдив. Подател: "${citizenName}", Сигнал: "${rawDescription}". Върни JSON с полета: corrected_text, location, assigned_institution (избери най-близкото ОП или Район), priority (Low, Medium, High), official_letter (текст по АПК).`;
+    // Изграждаме подробен prompt, който дефинира задачите на Супер-Мозъка
+    const prompt = `Изпълни следните стъпки за обработка на сигнала последователно:
+
+СТЪПКА 1 (Корекция): Коригирай правописа, граматиката и стилистиката на следния текст на български език: "${rawDescription}". Превърни го в културно, ясно и добре структурирано описание.
+
+СТЪПКА 2 (Администрация): Анализираш коригирания текст и извлечи:
+- Точен адрес/локация в град Пловдив.
+- Ниво на спешност (priority) – избери точно едно от: 'Low', 'Medium', 'High'.
+- Отговорна институция (assigned_institution) – избери най-подходящата от следните: 'ОП Чистота', 'ОП Градини и паркове', 'ОП Организация и контрол на транспорта', 'Район Централен', 'Район Южен', 'Район Северен', 'Район Западен', 'Район Източен', 'Район Тракия', 'Община Пловдив'.
+
+СТЪПКА 3 (Правно оформяне): Създай официално писмо-сигнал по чл. 107-111 от АПК. Писмото трябва да съдържа:
+- "ДО: [Името на избраната институция]"
+- "ОТ: [Три имена на гражданина: ${citizenName}], Имейл: ${citizenEmail}, Тел: ${citizenPhone || 'Не е посочен'}"
+- Текст, който официално, сериозно и аргументирано излага проблема и призовава за проверка на място и последващи действия.
+- Официален завършек ("С уважение...").
+
+Данни за подателя:
+Име: ${citizenName}
+Имейл: ${citizenEmail}
+
+Върни резултата СТРИКТНО като JSON обект със следните полета (и нищо друго):
+{
+  "corrected_text": "коригираният текст от стъпка 1",
+  "location": "извлеченият адрес от стъпка 2",
+  "assigned_institution": "избраната институция от стъпка 2",
+  "priority": "избраният приоритет от стъпка 2",
+  "official_letter": "официалното писмо от стъпка 3"
+}`;
 
     const aiResponse = await model.generateContent(prompt);
     let responseText = aiResponse.response.text().trim();
     
+    // Дефанзивна защита срещу евентуално markdown форматиране
     if (responseText.startsWith("```")) {
       responseText = responseText.replace(/^```json|```$/g, "").trim();
     }
 
     const structuredData = JSON.parse(responseText);
 
+    // Запис в базата данни на Supabase
     const { data, error } = await supabase
       .from('signals')
       .insert([
@@ -80,7 +112,7 @@ export default async function handler(request, response) {
     return response.status(200).json({ success: true, data: data[0] });
 
   } catch (err) {
-    console.error(err);
-    return response.status(500).json({ success: false, error: err.message });
+    console.error('Критична грешка в ИИ Модула:', err);
+    return response.status(500).json({ success: false, error: 'ИИ не успя да структурира сигнала. Опитайте пак.' });
   }
 }
