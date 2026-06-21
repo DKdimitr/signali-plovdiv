@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сигнали Пловдив - Подобри своя град</title>
+    <!-- Tailwind CSS за модерен и бърз дизайн -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        body {
+            background-color: #f8fafc;
+        }
+        .plovdiv-blue { background-color: #1e3a8a; }
+        .plovdiv-gold { background-color: #d97706; }
+    </style>
+</head>
+<body class="font-sans antialiased text-gray-900">
+
+    <!-- Навигация / Хедър -->
+    <header class="plovdiv-blue text-white shadow-md">
+        <div class="max-w-4xl mx-auto px-4 py-5 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl">🏛️</span>
+                <h1 class="text-xl font-bold tracking-tight">Сигнали <span class="text-amber-400">Пловдив</span></h1>
+            </div>
+            <span class="text-xs bg-blue-800 px-3 py-1 rounded-full text-blue-200 font-medium">Граждански инкубатор</span>
+        </div>
+    </header>
+
+    <!-- Основно съдържание -->
+    <main class="max-w-3xl mx-auto px-4 py-8">
+        
+        <!-- Приветствено съобщение -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-8 text-center sm:text-left">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Помогни на Пловдив да стане по-чист и безопасен</h2>
+            <p class="text-gray-600">Подай сигнал за преливащи контейнери, дупки по улиците или неокосена трева. Нашият изкуствен интелект (Gemini AI) автоматично ще го обработи, коригира и насочи към правилното общинско предприятие.</p>
+        </div>
+
+        <!-- Форма за сигнал -->
+        <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-md border border-gray-100">
+            <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                <span class="mr-2">📝</span> Нова декларация на проблем
+            </h3>
+
+            <form id="signalForm" class="space-y-6">
+                
+                <!-- Секция: Лични данни (Правна легитимност по АПК) -->
+                <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 space-y-4">
+                    <h4 class="text-sm font-semibold text-blue-900 uppercase tracking-wider">Данни за подателя (Изискване по АПК)</h4>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Две или три имена *</label>
+                        <input type="text" id="citizenName" required placeholder="напр. Димитър Колев"
+                            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Имейл за обратна връзка *</label>
+                            <input type="email" id="citizenEmail" required placeholder="yourname@example.com"
+                                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Телефон за връзка</label>
+                            <input type="tel" id="citizenPhone" placeholder="напр. 0888123456"
+                                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Секция: Самият сигнал -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Описание на ситуацията</h4>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Какво забелязахте? *</label>
+                        <textarea id="rawDescription" required rows="4" 
+                            placeholder="Опишете проблема със собствени думи... (напр. Преливащи кофи за смет в Кючука на ул. Димитър Талев)"
+                            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Линк към снимка (опционално)</label>
+                        <input type="url" id="imageUrl" placeholder="https://example.com/snimka.jpg"
+                            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition shadow-sm">
+                        <p class="text-xs text-gray-500 mt-1">💡 Съвет: Снимковият материал ускорява реакцията на общинските инспектори с над 80%.</p>
+                    </div>
+                </div>
+
+                <!-- GDPR Съгласие -->
+                <div class="flex items-start mt-2">
+                    <div class="flex items-center h-5">
+                        <input id="gdpr" type="checkbox" required class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="gdpr" class="font-medium text-gray-700">Съгласен съм с обработката на личните ми данни</label>
+                        <p class="text-gray-500 text-xs">Данните се събират единствено за легитимиране на сигнала пред структурите на Община Пловдив съгласно изискванията на АПК и GDPR.</p>
+                    </div>
+                </div>
+
+                <!-- Бутон за изпращане -->
+                <div>
+                    <button type="submit" 
+                        class="w-full plovdiv-blue hover:bg-blue-900 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition duration-150 active:scale-[0.98] flex justify-center items-center space-x-2 text-lg cursor-pointer">
+                        <span>🚀 Изпрати сигнал към AI Агента</span>
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </main>
+
+    <!-- Футър -->
+    <footer class="bg-gray-800 text-gray-400 py-6 mt-12 border-t border-gray-700">
+        <div class="max-w-4xl mx-auto px-4 text-center text-xs space-y-2">
+            <p>© 2026 Сигнали Пловдив. Всички права запазени.</p>
+            <p>Проектът е с отворен код с цел подобряване на градската среда чрез иновации.</p>
+        </div>
+    </footer>
+
+</body>
+</html>
