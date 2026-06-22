@@ -116,32 +116,42 @@ export default async function handler(request, response) {
 let finalLat = body.latitude;
     let finalLng = body.longitude;
 
-// Ако потребителят НЕ е цъкнал на картата, но Gemini е извлякъл текстов адрес
-// Ако потребителят НЕ е цъкнал на картата, но Gemini е извлякъл текстов адрес
+    // Ако потребителят НЕ е цъкнал на картата, но Gemini е извлякъл текстов адрес
     if (!finalLat || !finalLng) {
       try {
         const cleanLocation = structuredData.location ? structuredData.location.trim() : "";
         
+        console.log("=== СТАРТ АВТОМАТИЧНО ГЕОКОДИРАНЕ ===");
+        console.log(`Получен адрес от ИИ: "${cleanLocation}"`);
+        
+        // 1. Извличаме името без типа на улицата и без номера накрая
         const pureName = cleanLocation
           .replace(/^(ул\.|улица|бул\.|булевард|пл\.|площад|ж\.к\.|квартал)\s+/i, "")
-          .replace(/\s+\d+\s*$/, "")
+          .replace(/\s+\d+.*$/, "") // Маха номера и всичко след него
           .trim();
-        
+
+        // 2. Спасителен пояс: взимаме само първата дума от името (напр. от "Иван Гешев" -> "Иван")
+        const firstWordOnly = pureName.split(/[\s,]+/)[0];
+
+        // Генерираме списък от опити - от най-специфичен към най-абстрактен
         const searchAttempts = [
-          `${cleanLocation}, Пловдив, България`,
-          `${cleanLocation.replace(/\s+\d+\s*$/, "")}, Пловдив, България`,
-          pureName ? `${pureName}, Пловдив, България` : null
+          `${cleanLocation}, Пловдив, България`, 
+          `${cleanLocation.replace(/\s+\d+.*$/, "")}, Пловдив, България`, 
+          pureName ? `${pureName}, Пловдив, България` : null,
+          firstWordOnly ? `${firstWordOnly}, Пловдив, България` : null
         ].filter(Boolean);
 
-        for (const queryText of searchAttempts) {
-          if (finalLat && finalLng) break;
+        // Географска кутия (Viewbox) строго около Пловдив: ляво,горе,дясно,долу
+        const plovdivViewbox = "24.60,42.20,24.90,42.10";
 
-          console.log(`Пробвам геокодиране в OSM с: "${queryText}"`);
+        for (const queryText of searchAttempts) {
+          if (finalLat && finalLng) break; // Спираме, ако сме намерили точка
+
+          console.log(`Изпращам заявка към OSM: "${queryText}"`);
           const searchQuery = encodeURIComponent(queryText);
           
-          // КОРИГИРАНО: Добавен viewbox и bounded=1 за строго търсене в Пловдив
           const geoResponse = await fetch(
-            `https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=1&bounded=1&viewbox=24.60,42.20,24.90,42.10`, 
+            `https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=1&bounded=1&viewbox=${plovdivViewbox}`, 
             {
               headers: { 'User-Agent': 'PlovdivSignalsCitizenIncubator/1.0' }
             }
@@ -149,20 +159,28 @@ let finalLat = body.latitude;
 
           if (geoResponse.ok) {
             const geoData = await geoResponse.json();
+            
             if (geoData && geoData.length > 0) {
               finalLat = parseFloat(geoData[0].lat);
               finalLng = parseFloat(geoData[0].lon);
-              console.log(`🎯 Успех! Намерени координати в Пловдив: ${finalLat}, ${finalLng}`);
-              break;
+              console.log(`🎯 УСПЕХ! Намерени координати: ${finalLat}, ${finalLng} чрез критерий: "${queryText}"`);
+              break; 
+            } else {
+              console.log(`❌ Липсва резултат в OSM за: "${queryText}"`);
             }
           }
           
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Пауза за предпазване от Rate Limit на OpenStreetMap
+          await new Promise(resolve => setTimeout(resolve, 250));
         }
 
+        if (!finalLat || !finalLng) {
+          console.log("⚠️ Всички опити за геокодиране пропаднаха. Сигналът остава без локация.");
+        }
+        console.log("=== КРАЙ НА ГЕОКОДИРАНЕТО ===");
+
       } catch (geoError) {
-        console.error("Грешка при автоматично геокодиране:", geoError);
-        // Не хвърляме грешка, за да може сигналът все пак да се запише в базата данни
+        console.error("Грешка в процеса на автоматично геокодиране:", geoError);
       }
     }
     // ==========================================
