@@ -90,9 +90,9 @@
                             </h3>
                             <p class="text-[11px] text-slate-400">Кликни, за да зададеш точна локация</p>
                         </div>
-                     <button type="button" id="locationBadge" onclick="clearUserMarker()" class="hidden text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 px-2.5 py-1 rounded-md font-semibold hover:bg-rose-100 transition cursor-pointer flex items-center space-x-1">
-    <span>📍 Локацията е фиксирана</span>
-    <span class="font-bold text-rose-400 ml-1 hover:text-rose-900">✕</span>
+<button type="button" id="locationBadge" onclick="clearUserMarker()" class="hidden text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200/60 px-2.5 py-1 rounded-md font-medium animate-pulse hover:bg-emerald-100 transition cursor-pointer flex items-center space-x-1.5">
+    <span>📍 Локацията е фиксирана!</span>
+    <span class="font-bold text-emerald-400 hover:text-emerald-900 ml-1">✕</span>
 </button>
                     </div>
                     <div id="map" class="h-[460px] w-full rounded-2xl border border-slate-100 shadow-inner"></div>
@@ -213,8 +213,21 @@
         }).addTo(map);
 
         let userMarker = null;
+        // Функция за пълно премахване на маркера и зануляване на координатите
+        function clearUserMarker() {
+            if (userMarker) {
+                map.removeLayer(userMarker);
+                userMarker = null;
+            }
+            // Изчистваме скритите полета във формата
+            document.getElementById('latitude').value = '';
+            document.getElementById('longitude').value = '';
+            
+            // Скриваме обратно бутона
+            document.getElementById('locationBadge').classList.add('hidden');
+        }
 
-        // Клик върху картата за локация
+// Клик върху картата за локация
         map.on('click', function(e) {
             const lat = e.latlng.lat;
             const lng = e.latlng.lng;
@@ -225,10 +238,18 @@
             const badge = document.getElementById('locationBadge');
             badge.classList.remove('hidden');
 
+            // Текст в балончето с линк за премахване
+            const popupText = `
+                <div class="text-center space-y-1 font-sans">
+                    <b>Място на вашия сигнал</b><br>
+                    <button type="button" onclick="clearUserMarker()" class="text-[10px] text-rose-600 font-bold hover:underline cursor-pointer">✕ Премахни маркер</button>
+                </div>
+            `;
+
             if (userMarker) {
                 userMarker.setLatLng(e.latlng);
             } else {
-                userMarker = L.marker(e.latlng, {draggable: true}).addTo(map).bindPopup("<b>Място на вашия сигнал</b>").openPopup();
+                userMarker = L.marker(e.latlng, {draggable: true}).addTo(map).bindPopup(popupText).openPopup();
                 userMarker.on('moveend', function(ev) {
                     const pos = ev.target.getLatLng();
                     document.getElementById('latitude').value = pos.lat;
