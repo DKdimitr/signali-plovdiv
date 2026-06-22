@@ -90,9 +90,10 @@
                             </h3>
                             <p class="text-[11px] text-slate-400">Кликни, за да зададеш точна локация</p>
                         </div>
-                        <span id="locationBadge" class="hidden text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-1 rounded-md font-semibold animate-pulse">
-                            📍 Локацията е фиксирана
-                        </span>
+                     <button type="button" id="locationBadge" onclick="clearUserMarker()" class="hidden text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 px-2.5 py-1 rounded-md font-semibold hover:bg-rose-100 transition cursor-pointer flex items-center space-x-1">
+    <span>📍 Локацията е фиксирана</span>
+    <span class="font-bold text-rose-400 ml-1 hover:text-rose-900">✕</span>
+</button>
                     </div>
                     <div id="map" class="h-[460px] w-full rounded-2xl border border-slate-100 shadow-inner"></div>
                 </div>
