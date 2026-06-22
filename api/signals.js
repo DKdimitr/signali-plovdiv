@@ -117,53 +117,46 @@ let finalLat = body.latitude;
     let finalLng = body.longitude;
 
 // Ако потребителят НЕ е цъкнал на картата, но Gemini е извлякъл текстов адрес
+// Ако потребителят НЕ е цъкнал на картата, но Gemini е извлякъл текстов адрес
     if (!finalLat || !finalLng) {
       try {
         const cleanLocation = structuredData.location ? structuredData.location.trim() : "";
         
-        // Махаме съкращения и номера, за да извлечем СЛЕДВАЩОТО по ред чисто име (напр. от "бул. Копривщица 19" -> "Копривщица")
-        // Това е ключово за OpenStreetMap, когато булевардите са разделени на платна в базата данни
         const pureName = cleanLocation
-          .replace(/^(ул\.|улица|бул\.|булевард|пл\.|площад|ж\.к\.|квартал)\s+/i, "") // Премахва типа на обекта
-          .replace(/\s+\d+\s*$/, "") // Премахва номера накрая (ако има такъв)
+          .replace(/^(ул\.|улица|бул\.|булевард|пл\.|площад|ж\.к\.|квартал)\s+/i, "")
+          .replace(/\s+\d+\s*$/, "")
           .trim();
         
-        // Масив с варианти за търсене - от най-детайлен към най-общ
         const searchAttempts = [
-          // Опит 1: Точният адрес от ИИ (напр. "бул. Копривщица 19, Пловдив, България")
           `${cleanLocation}, Пловдив, България`,
-          
-          // Опит 2: Премахваме номера накрая, за да хванем поне самата улица (напр. "бул. Копривщица, Пловдив, България")
           `${cleanLocation.replace(/\s+\d+\s*$/, "")}, Пловдив, България`,
-          
-          // Опит 3: Ключово търсене само по чисто име (напр. "Копривщица, Пловдив, България")
-          // Ако pureName е празен стринг (поради някаква причина), този опит се пропуска в цикъла
           pureName ? `${pureName}, Пловдив, България` : null
-        ].filter(Boolean); // Филтрираме null стойностите, ако Опит 3 е празен
+        ].filter(Boolean);
 
-        // Въртим цикъл през наличните опити, докато някой не върне координати
         for (const queryText of searchAttempts) {
-          if (finalLat && finalLng) break; // Ако вече сме намерили точка в предния опит - спираме
+          if (finalLat && finalLng) break;
 
           console.log(`Пробвам геокодиране в OSM с: "${queryText}"`);
           const searchQuery = encodeURIComponent(queryText);
           
-          // Извикваме безплатното Nominatim API на OpenStreetMap
-          const geoResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=1`, {
-            headers: { 'User-Agent': 'PlovdivSignalsCitizenIncubator/1.0' }
-          });
+          // КОРИГИРАНО: Добавен viewbox и bounded=1 за строго търсене в Пловдив
+          const geoResponse = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=1&bounded=1&viewbox=24.60,42.20,24.90,42.10`, 
+            {
+              headers: { 'User-Agent': 'PlovdivSignalsCitizenIncubator/1.0' }
+            }
+          );
 
           if (geoResponse.ok) {
             const geoData = await geoResponse.json();
             if (geoData && geoData.length > 0) {
               finalLat = parseFloat(geoData[0].lat);
               finalLng = parseFloat(geoData[0].lon);
-              console.log(`🎯 Успех! Намерени координати: ${finalLat}, ${finalLng}`);
-              break; // Прекъсваме цикъла, защото открихме локацията успешно
+              console.log(`🎯 Успех! Намерени координати в Пловдив: ${finalLat}, ${finalLng}`);
+              break;
             }
           }
           
-          // Малка пауза от 200ms между заявките, за да спазим изискванията на OSM API
           await new Promise(resolve => setTimeout(resolve, 200));
         }
 
