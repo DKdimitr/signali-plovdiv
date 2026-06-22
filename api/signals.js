@@ -84,6 +84,38 @@ export default async function handler(request, response) {
     }
 
     const structuredData = JSON.parse(responseText);
+    // ==========================================
+    // АВТОМАТИЧНО ГЕОКОДИРАНЕ ЧРЕЗ OPENSTREETMAP (NOMINATIM)
+    // ==========================================
+    let finalLat = body.latitude;
+    let finalLng = body.longitude;
+
+    // Ако потребителят НЕ е цъкнал на картата, но Gemini е извлякъл текстов адрес
+    if (!finalLat || !finalLng) {
+      try {
+        // Добавяме ", Пловдив, България", за да сме сигурни, че търсим на правилното място
+        const searchQuery = encodeURIComponent(`${structuredData.location}, Пловдив, България`);
+        console.log("Търсене на координати за:", structuredData.location);
+        
+        // Извикваме безплатното Nominatim API на OpenStreetMap
+        // Задължително подаваме User-Agent, за да не ни блокират (изискване на OSM)
+        const geoResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=1`, {
+          headers: { 'User-Agent': 'PlovdivSignalsCitizenIncubator/1.0' }
+        });
+
+        if (geoResponse.ok) {
+          const geoData = await geoResponse.json();
+          if (geoData && geoData.length > 0) {
+            finalLat = parseFloat(geoData[0].lat);
+            finalLng = parseFloat(geoData[0].lon);
+            console.log(`Успешно геокодиране: ${finalLat}, ${finalLng}`);
+          }
+        }
+      } catch (geoError) {
+        console.error("Грешка при автоматично геокодиране:", geoError);
+        // Не хвърляме грешка, за да може сигналът все пак да се запише, дори без координати
+      }
+    }
 
     // ==========================================
     // ДИРЕКТЕН И СИГУРЕН ЗАПИС В SUPABASE ЧРЕЗ HTTP REST API
@@ -101,11 +133,14 @@ export default async function handler(request, response) {
         corrected_text: structuredData.corrected_text,
         location: structuredData.location,
         assigned_institution: structuredData.assigned_institution,
+        // Проверяваме дали ИИ е върнал валиден приоритет, ако не - слагаме по подразбиране 'Medium'
         priority: ['Low', 'Medium', 'High'].includes(structuredData.priority) ? structuredData.priority : 'Medium',
         official_letter: structuredData.official_letter,
         status: 'Подаден',
-        latitude: latitude || null,
-        longitude: longitude || null
+        
+        // НОВИТЕ КОЛОНИ ЗА ГЕО-ЛОКАЦИЯ (АВТОМАТИЧНИ ИЛИ ОТ КАРТАТА):
+        latitude: finalLat || null,
+        longitude: finalLng || null
       };
 
       console.log("Опит за директна HTTP заявка към:", `${supabaseUrl}/rest/v1/signals`);
