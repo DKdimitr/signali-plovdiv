@@ -76,12 +76,38 @@ export default async function handler(request, response) {
   "official_letter": "официалното писмо от стъпка 3"
 }`;
 
-    const aiResponse = await model.generateContent(prompt);
-    let responseText = aiResponse.response.text().trim();
-    
+   // =========================================================================
+    // ОБНОВЕН БЛОК: ИЗВЛИЧАНЕ НА ДАННИ ОТ GEMINI СЪС ЗАЩИТА ОТ ГРЕШКИ 503
+    // =========================================================================
+    let responseText = "";
+    const maxRetries = 3; // Брой опити, които системата ще направи
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const aiResponse = await model.generateContent(prompt);
+        // Взимаме текста и веднага изчистваме излишните интервали по краищата
+        responseText = aiResponse.response.text().trim(); 
+        
+        // Ако заявката премине успешно, прекъсваме цикъла (retry) и продължаваме напред
+        break; 
+      } catch (aiError) {
+        console.error(`Отказ на Gemini при опит ${attempt} от общо ${maxRetries}:`, aiError);
+        
+        // Ако това е бил последният опит и все още дава грешка — я хвърляме нагоре към catch блока
+        if (attempt === maxRetries) {
+          throw aiError; 
+        }
+        
+        // Преди следващия опит правим малка пауза от 800 милисекунди (за да изчакаме сървъра)
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+    }
+
+    // Твоята съществуваща логика за изчистване на JSON от Markdown тагове (изпълнява се след успешния цикъл)
     if (responseText.startsWith("```")) {
       responseText = responseText.replace(/^```json|```$/g, "").trim();
     }
+    // =========================================================================
 
     const structuredData = JSON.parse(responseText);
     // ==========================================
