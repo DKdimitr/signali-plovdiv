@@ -35,7 +35,7 @@
         <!-- Приветствено съобщение -->
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center sm:text-left">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">Помогни на Пловдив да стане по-чист и безопасен</h2>
-            <p class="text-gray-600">Подай сигнал за преливащи контейнери, дупки или неокосена трева. Нашият изкуствен интелект (Gemini AI) автоматично ще го обработи, оформи по АПК и насочи към правилната общинска институция.</p>
+            <p class="text-gray-600">Подай сигнал за преливащи контейнери, дупки или неокосена трева. Нашият агент автоматично ще го обработи, оформи по АПК и насочи към правилната общинска институция.</p>
         </div>
 
         <!-- КАРТА НА ЖИВО (Интеграция от PoC) -->
@@ -130,7 +130,7 @@
 
                     <!-- Бутон -->
                     <button type="submit" class="w-full plovdiv-blue hover:bg-blue-900 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition active:scale-[0.98] flex justify-center items-center space-x-2 text-lg cursor-pointer">
-                        <span>🚀 Изпрати сигнал към AI Агента</span>
+                        <span>🚀 Изпрати сигнал към Агента</span>
                     </button>
                     <div id="officialLetterContainer" class="hidden mt-6 p-6 bg-gray-50 rounded-xl border border-blue-200 space-y-3">
     <h4 class="text-md font-bold text-blue-900 flex items-center">
@@ -241,7 +241,7 @@
             const originalButtonText = submitButton.innerHTML;
             
             submitButton.disabled = true;
-            submitButton.innerHTML = `<span>⏳ AI „Супер-Мозък“ оформя сигнала по АПК...</span>`;
+            submitButton.innerHTML = `<span>⏳ Агента оформя сигнала по АПК...</span>`;
 
             const formData = {
                 citizenName: document.getElementById('citizenName').value.trim(),
