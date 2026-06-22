@@ -113,36 +113,54 @@ export default async function handler(request, response) {
     // ==========================================
     // АВТОМАТИЧНО ГЕОКОДИРАНЕ ЧРЕЗ OPENSTREETMAP (NOMINATIM)
     // ==========================================
-    let finalLat = body.latitude;
+let finalLat = body.latitude;
     let finalLng = body.longitude;
 
     // Ако потребителят НЕ е цъкнал на картата, но Gemini е извлякъл текстов адрес
     if (!finalLat || !finalLng) {
       try {
-        // Добавяме ", Пловдив, България", за да сме сигурни, че търсим на правилното място
-        const searchQuery = encodeURIComponent(`${structuredData.location}, Пловдив, България`);
-        console.log("Търсене на координати за:", structuredData.location);
+        const cleanLocation = structuredData.location ? structuredData.location.trim() : "";
         
-        // Извикваме безплатното Nominatim API на OpenStreetMap
-        // Задължително подаваме User-Agent, за да не ни блокират (изискване на OSM)
-        const geoResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=1`, {
-          headers: { 'User-Agent': 'PlovdivSignalsCitizenIncubator/1.0' }
-        });
+        // Масив с варианти за търсене - първо с номер, после само по името на улицата
+        const searchAttempts = [
+          // Опит 1: Точният адрес от ИИ (напр. "ул. Академик Иван Гешев 30, Пловдив, България")
+          `${cleanLocation}, Пловдив, България`,
+          
+          // Опит 2: Премахваме номера накрая, за да хванем поне самата улица (напр. "ул. Академик Иван Гешев, Пловдив, България")
+          `${cleanLocation.replace(/\s+\d+\s*$/, "")}, Пловдив, България`
+        ];
 
-        if (geoResponse.ok) {
-          const geoData = await geoResponse.json();
-          if (geoData && geoData.length > 0) {
-            finalLat = parseFloat(geoData[0].lat);
-            finalLng = parseFloat(geoData[0].lon);
-            console.log(`Успешно геокодиране: ${finalLat}, ${finalLng}`);
+        // Въртим цикъл през двата опита, докато някой не върне координати
+        for (const queryText of searchAttempts) {
+          if (finalLat && finalLng) break; // Ако вече сме намерили точка в предния опит - спираме
+
+          console.log(`Пробвам геокодиране в OSM с: "${queryText}"`);
+          const searchQuery = encodeURIComponent(queryText);
+          
+          // Извикваме безплатното Nominatim API на OpenStreetMap
+          const geoResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=1`, {
+            headers: { 'User-Agent': 'PlovdivSignalsCitizenIncubator/1.0' }
+          });
+
+          if (geoResponse.ok) {
+            const geoData = await geoResponse.json();
+            if (geoData && geoData.length > 0) {
+              finalLat = parseFloat(geoData[0].lat);
+              finalLng = parseFloat(geoData[0].lon);
+              console.log(`🎯 Успех! Намерени координати: ${finalLat}, ${finalLng}`);
+              break; // Прекъсваме цикъла, защото открихме локацията успешно
+            }
           }
+          
+          // Малка пауза от 200ms между двете заявки, за да спазим изискванията на OSM API
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
+
       } catch (geoError) {
         console.error("Грешка при автоматично геокодиране:", geoError);
-        // Не хвърляме грешка, за да може сигналът все пак да се запише, дори без координати
+        // Не хвърляме грешка, за да може сигналът все пак да се запише в базата
       }
     }
-
     // ==========================================
     // ДИРЕКТЕН И СИГУРЕН ЗАПИС В SUPABASE ЧРЕЗ HTTP REST API
     // ==========================================
