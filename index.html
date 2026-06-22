@@ -183,24 +183,45 @@
             }
         });
 
-        // Функция за автоматично зареждане на всички сигнали от базата на картата
+// Функция за автоматично зареждане на всички сигнали от базата на картата
         async function loadPublicSignals() {
             try {
+                // 1. Първо премахваме всички съществуващи публични маркери от картата, 
+                // за да предотвратим дублиране при повторно извикване на функцията.
+                map.eachLayer(function (layer) {
+                    // Изтриваме само обикновените маркери (карфици), но ЗАПАЗВАМЕ 
+                    // самата карта (TileLayer) и текущия временен маркер на потребителя (userMarker)
+                    if (layer instanceof L.Marker && layer !== userMarker) {
+                        map.removeLayer(layer);
+                    }
+                });
+
                 const res = await fetch('/api/get-signals');
                 const result = await res.json();
-                if (result.success) {
+                
+                if (result.success && result.data) {
                     result.data.forEach(signal => {
+                        // 2. ЗАДЪЛЖИТЕЛНА ПРОВЕРКА: Показва маркера само ако има валидни координати.
+                        // Ако в бекенда адресът е бил тотално невалиден и координатите са NULL,
+                        // този сигнал се прескача тихомълком и НЕ се показва на картата (няма струпване в центъра!).
                         if (signal.latitude && signal.longitude) {
-                            // Цветна икона или базов маркер според институцията/статуса
+                            
+                            // Създаваме маркер за конкретния сигнал
                             const marker = L.marker([signal.latitude, signal.longitude]).addTo(map);
+                            
                             marker.bindPopup(`
                                 <div class="space-y-1 font-sans text-xs">
                                     <div class="font-bold text-blue-900">Сигнал №${signal.id}</div>
+                                    <div class="text-gray-700 font-medium mt-1">${signal.corrected_text || 'Няма описание'}</div>
+                                    <hr class="my-1 border-gray-200" />
                                     <div><b>Насочен към:</b> ${signal.assigned_institution}</div>
                                     <div><b>Приоритет:</b> ${signal.priority}</div>
                                     <div class="mt-1 px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-center font-bold">Статус: ${signal.status}</div>
                                 </div>
                             `);
+                        } else {
+                            // Лог в конзолата за администратора (скрит за гражданите)
+                            console.log(`Сигнал №${signal.id} е записан успешно, но адресът не беше геокодиран и маркерът е скрит.`);
                         }
                     });
                 }
