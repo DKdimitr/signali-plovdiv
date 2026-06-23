@@ -1,6 +1,9 @@
 // Конфигурирай твоя supabase клиент най-отгоре (както си го направил досега)
-// const { createClient } = require('@supabase/supabase-js');
-// const supabase = createClient(..., ...);
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // или anon key, зависи как си го кръстил в Vercel variables
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
     // 1. Позволяваме САМО POST заявки (еквивалентно на app.post)
