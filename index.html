@@ -96,7 +96,7 @@
                     Помогни на Пловдив да стане по-чист и безопасен
                 </h2>
                 <p class="text-slate-600 text-sm sm:text-base max-w-2xl leading-relaxed">
-                    Подай сигнал за инфраструктурни проблеми. Нашият изкуствен интелект автоматично ще го обработи, оформи по изискванията на <strong class="text-indigo-950 font-semibold">АПК</strong> и насочи към правилната общинска институция.
+                    Подай сигнал за infrastructure проблеми. Нашият изкуствен интелект автоматично ще го обработи, оформи по изискванията на <strong class="text-indigo-950 font-semibold">АПК</strong> и насочи към правилната общинска институция.
                 </p>
             </div>
             
@@ -292,48 +292,46 @@
         }
 
         // КРАУДСОРСИНГ ФУНКЦИЯ ЗА ГЛАСУВАНЕ (Waze модел)
-         async function voteSignal(id, voteType) {
-    if (localStorage.getItem(`voted_signal_${id}`)) {
-        alert('Вие вече сте гласували за този сигнал!');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/vote-signals', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: id, voteType: voteType })
-        });
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            localStorage.setItem(`voted_signal_${id}`, 'true');
-            showNotification(`🗳️ ${result.message}`, 'success');
-            
-            // 🎯 ЕЛЕГАНТНИЯТ ХАК: Обновяваме текста директно в отворения в момента попъп на екрана
-            // Намираме контейнера на Leafled попъпа по ID-то на сигнала
-            const activePopup = document.querySelector('.leaflet-popup-content');
-            if (activePopup) {
-                // Презаписваме бройката гласове в HTML-а на екрана веднага
-                // (Така потребителят вижда промяната мигновено без премигване)
-                loadPublicSignals(); // Обновяваме базата отзад за следващи отваряния
+        async function voteSignal(id, voteType) {
+            if (localStorage.getItem(`voted_signal_${id}`)) {
+                alert('Вие вече сте гласували за този сигнал!');
+                return;
             }
-            
-            // Затваряме текущия попъп автоматично, за да принудим Leaflet да зареди новия HTML при следващо цъкане
-            map.closePopup();
-            
-        } else {
-            showNotification(`❌ Грешка при гласуване: ${result.error}`, 'error');
+
+            try {
+                const response = await fetch('/api/vote-signals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, voteType: voteType })
+                });
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    localStorage.setItem(`voted_signal_${id}`, 'true');
+                    showNotification(`🗳️ ${result.message}`, 'success');
+                    
+                    // 🎯 ПРЕЗАРЕЖДАНЕ НА ДАННИТЕ: Стартираме асинхронно обновяване на маркерите на заден план
+                    await loadPublicSignals();
+                    
+                    // Затваряме текущия попъп автоматично, за да принудим Leaflet да рендерира новия HTML при следващо кликване
+                    map.closePopup();
+                    
+                } else {
+                    showNotification(`❌ Грешка при гласуване: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                showNotification('❌ Срив в мрежата при изпращане на вота.', 'error');
+            }
         }
-    } catch (err) {
-        showNotification('❌ Срив в мрежата при изпращане на вота.', 'error');
-    }
-}
+
         // Зареждане на маркерите
         async function loadPublicSignals() {
             try {
+                // 🎯 ИЗЧИСТВАНЕ НА СТАРИТЕ МАРКЕРИ: Предотвратява дублиране на обекти
                 map.eachLayer(function (layer) {
-                    if (layer instanceof L.Marker && layer !== userMarker) { map.removeLayer(layer); }
+                    if (layer instanceof L.Marker && layer !== userMarker) { 
+                        map.removeLayer(layer); 
+                    }
                 });
 
                 const res = await fetch('/api/get-signals');
@@ -487,7 +485,7 @@
                             </div>
                         `;
                     } else {
-                        resultDiv.innerHTML = `<div class="text-rose-700 font-semibold">❌ Сигнал с номер №${idInput} не съществува в системата.</div>`;
+                        resultDiv.innerHTML = `<div class="text-rose-700 font-semibold">❌ Сигнал с номер №${idInput} не съществува in системата.</div>`;
                     }
                 } else {
                     resultDiv.innerHTML = "<div class='text-rose-700'>❌ Неуспешен опит за връзка с базата.</div>";
