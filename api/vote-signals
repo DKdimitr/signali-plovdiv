@@ -1,4 +1,4 @@
-app.post('/api/vote-signal', async (req, res) => {
+app.post('/api/vote-signals', async (req, res) => {
     const { id, voteType } = req.body;
 
     // 1. Валидация на входните данни
