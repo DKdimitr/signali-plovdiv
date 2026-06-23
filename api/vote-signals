@@ -1,7 +1,16 @@
-app.post('/api/vote-signals', async (req, res) => {
+// Конфигурирай твоя supabase клиент най-отгоре (както си го направил досега)
+// const { createClient } = require('@supabase/supabase-js');
+// const supabase = createClient(..., ...);
+
+export default async function handler(req, res) {
+    // 1. Позволяваме САМО POST заявки (еквивалентно на app.post)
+    if (req.method !== 'POST') {
+        return res.status(405).json({ success: false, error: 'Методът не е разрешен.' });
+    }
+
     const { id, voteType } = req.body;
 
-    // 1. Валидация на входните данни
+    // 2. Валидация на входните данни
     if (!id || !voteType) {
         return res.status(400).json({ success: false, error: 'Липсва ID на сигнала или тип глас.' });
     }
@@ -11,7 +20,7 @@ app.post('/api/vote-signals', async (req, res) => {
     }
 
     try {
-        // 2. Вземаме текущото състояние на сигнала от Supabase
+        // 3. Вземаме текущото състояние на сигнала от Supabase
         const { data: signal, error: fetchError } = await supabase
             .from('signals')
             .select('votes_still_there, votes_fixed, status')
@@ -27,9 +36,9 @@ app.post('/api/vote-signals', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Този проблем вече е маркиран като решен!' });
         }
 
-        // 3. Изчисляваме новите стойности на броячите
-        let updatedVotesStillThere = signal.votes_still_there;
-        let updatedVotesFixed = signal.votes_fixed;
+        // 4. Изчисляваме новите стойности на броячите
+        let updatedVotesStillThere = signal.votes_still_there || 0;
+        let updatedVotesFixed = signal.votes_fixed || 0;
         let newStatus = signal.status;
 
         if (voteType === 'still_there') {
@@ -43,7 +52,7 @@ app.post('/api/vote-signals', async (req, res) => {
             }
         }
 
-        // 4. Обновяваме данните в Supabase
+        // 5. Обновяваме данните в Supabase
         const { data: updatedData, error: updateError } = await supabase
             .from('signals')
             .update({ 
@@ -59,8 +68,8 @@ app.post('/api/vote-signals', async (req, res) => {
             throw updateError;
         }
 
-        // 5. Връщаме детайлен отговор към фронт-енда
-        return res.json({
+        // 6. Връщаме детайлен отговор към фронт-енда
+        return res.status(200).json({
             success: true,
             message: 'Гласът Ви бе успешно отчетен!',
             current_status: newStatus,
@@ -72,4 +81,4 @@ app.post('/api/vote-signals', async (req, res) => {
         console.error('Грешка при краудсорсинг гласуване:', err);
         return res.status(500).json({ success: false, error: 'Вътрешна сървърна грешка.' });
     }
-});
+}
