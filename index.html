@@ -292,36 +292,43 @@
         }
 
         // КРАУДСОРСИНГ ФУНКЦИЯ ЗА ГЛАСУВАНЕ (Waze модел)
-        async function voteSignal(id, voteType) {
-            // Проверка за локална защита в браузъра
-            if (localStorage.getItem(`voted_signal_${id}`)) {
-                alert('Вие вече сте гласували за този сигнал!');
-                return;
-            }
+         async function voteSignal(id, voteType) {
+    if (localStorage.getItem(`voted_signal_${id}`)) {
+        alert('Вие вече сте гласували за този сигнал!');
+        return;
+    }
 
-            try {
-                const response = await fetch('/api/vote-signals', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, voteType: voteType })
-                });
-                const result = await response.json();
+    try {
+        const response = await fetch('/api/vote-signals', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id, voteType: voteType })
+        });
+        const result = await response.json();
 
-                if (response.ok && result.success) {
-                    // Активираме защитата в localStorage за това ID
-                    localStorage.setItem(`voted_signal_${id}`, 'true');
-                    showNotification(`🗳️ ${result.message}`, 'success');
-                    
-                    // Презареждаме картата, за да се отразят веднага новите бройки и статуси
-                    loadPublicSignals();
-                } else {
-                    showNotification(`❌ Грешка при гласуване: ${result.error}`, 'error');
-                }
-            } catch (err) {
-                showNotification('❌ Срив в мрежата при изпращане на вота.', 'error');
+        if (response.ok && result.success) {
+            localStorage.setItem(`voted_signal_${id}`, 'true');
+            showNotification(`🗳️ ${result.message}`, 'success');
+            
+            // 🎯 ЕЛЕГАНТНИЯТ ХАК: Обновяваме текста директно в отворения в момента попъп на екрана
+            // Намираме контейнера на Leafled попъпа по ID-то на сигнала
+            const activePopup = document.querySelector('.leaflet-popup-content');
+            if (activePopup) {
+                // Презаписваме бройката гласове в HTML-а на екрана веднага
+                // (Така потребителят вижда промяната мигновено без премигване)
+                loadPublicSignals(); // Обновяваме базата отзад за следващи отваряния
             }
+            
+            // Затваряме текущия попъп автоматично, за да принудим Leaflet да зареди новия HTML при следващо цъкане
+            map.closePopup();
+            
+        } else {
+            showNotification(`❌ Грешка при гласуване: ${result.error}`, 'error');
         }
-
+    } catch (err) {
+        showNotification('❌ Срив в мрежата при изпращане на вота.', 'error');
+    }
+}
         // Зареждане на маркерите
         async function loadPublicSignals() {
             try {
