@@ -18,11 +18,11 @@ export default async function handler(request, response) {
   try {
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-    // Взимаме сигналите. С цел сигурност, селектираме САМО публичните полета.
+    // Взимаме сигналите. Селектираме само публичните полета + колоните за вот!
     // Скриваме трите имена, телефона и имейла на гражданите!
     const { data, error } = await supabase
       .from('signals')
-      .select('id, created_at, corrected_text, location, assigned_institution, priority, status, image_url, latitude, longitude')
+      .select('id, created_at, corrected_text, location, assigned_institution, priority, status, image_url, latitude, longitude, votes_still_there, votes_fixed')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
