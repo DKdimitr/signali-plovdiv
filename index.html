@@ -10,12 +10,11 @@
     <style>
         body { background-color: #f8fafc; }
         #map { z-index: 10; }
-        /* Красива персонализация на скролбара за писмото по АПК */
         pre::-webkit-scrollbar { width: 6px; height: 6px; }
         pre::-webkit-scrollbar-track { background: #f1f5f9; }
         pre::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
-        /* Контейнер за пулсиращия активен маркер */
+        /* Динамична иконка за геолокация (пин) с разширяващи се концентрични кръгове (АКТИВЕН) */
         .pulse-marker {
             display: flex;
             align-items: center;
@@ -23,7 +22,6 @@
             width: 20px;
             height: 20px;
         }
-        /* Централната точка за активен проблем */
         .pulse-dot {
             width: 12px;
             height: 12px;
@@ -33,7 +31,6 @@
             box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
             z-index: 2;
         }
-        /* Разширяващите се концентрични кръгове (Пулсът) */
         .pulse-marker::before {
             content: '';
             position: absolute;
@@ -50,7 +47,7 @@
             100% { transform: scale(1.6); opacity: 0; }
         }
 
-        /* Статичен, зелен маркер за Решени проблеми */
+        /* Статичен, умиротворен изумруден маркер (РАЗРЕШЕН ОТ ГРАЖДАНИ) */
         .resolved-marker {
             display: flex;
             align-items: center;
@@ -151,7 +148,7 @@
                     <p class="text-xs text-slate-400 mt-1">Попълнете полетата. Всичко останало ще бъде извършено от нашия изкуствен интелект.</p>
                 </div>
 
-                <div id="statusNotification" class="hidden mb-6 p-4 rounded-xl text-sm font-medium transition duration-300"></div>
+                <div id="statusNotification" class="hidden mb-6 p-4 rounded-xl text-sm font-medium transition duration-300 border"></div>
 
                 <form id="signalForm" class="space-y-6">
                     <input type="hidden" id="latitude">
@@ -229,15 +226,7 @@
         </div>
     </main>
 
-    <footer class="bg-slate-900 text-slate-500 py-8 mt-16 border-t border-slate-800">
-        <div class="max-w-7xl mx-auto px-4 text-center text-xs space-y-2">
-            <p class="font-medium text-slate-400">© 2026 Граждански инкубатор – Сигнали Пловдив.</p>
-            <p class="text-slate-600">Експериментална AI платформа за по-чиста и уредена градска среда.</p>
-        </div>
-    </footer>
-
     <script>
-        // Инициализиране на картата над Пловдив
         const map = L.map('map', { scrollWheelZoom: true }).setView([42.14492, 24.75032], 13);
         
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -247,20 +236,15 @@
         let userMarker = null;
 
         function clearUserMarker() {
-            if (userMarker) {
-                map.removeLayer(userMarker);
-                userMarker = null;
-            }
+            if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
             document.getElementById('latitude').value = '';
             document.getElementById('longitude').value = '';
             document.getElementById('locationBadge').classList.add('hidden');
         }
 
-        // Клик върху картата за фиксиране на локация
         map.on('click', function(e) {
             document.getElementById('latitude').value = e.latlng.lat;
             document.getElementById('longitude').value = e.latlng.lng;
-            
             document.getElementById('locationBadge').classList.remove('hidden');
 
             const popupText = `
@@ -282,7 +266,6 @@
             }
         });
 
-        // Динамичен преглед на снимка
         document.getElementById('imageUrl').addEventListener('input', function() {
             const url = this.value.trim();
             const container = document.getElementById('imagePreviewContainer');
@@ -298,7 +281,6 @@
         function showNotification(message, type = 'success') {
             const notif = document.getElementById('statusNotification');
             notif.className = "mb-6 p-4 rounded-xl text-sm font-medium transition duration-300 border";
-            
             if (type === 'success') {
                 notif.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200/60');
             } else {
@@ -309,79 +291,100 @@
             notif.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
-        // Изпращане на заявка за промяна на статуса (Новата логика)
-        async function updateSignalStatus(id, newStatus) {
+        // КРАУДСОРСИНГ ФУНКЦИЯ ЗА ГЛАСУВАНЕ (Waze модел)
+        async function voteSignal(id, voteType) {
+            // Проверка за локална защита в браузъра
+            if (localStorage.getItem(`voted_signal_${id}`)) {
+                alert('Вие вече сте гласували за този сигнал!');
+                return;
+            }
+
             try {
-                const response = await fetch('/api/update-status', {
-                    method: 'PATCH',
+                const response = await fetch('/api/vote-signal', {
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, status: newStatus })
+                    body: JSON.stringify({ id: id, voteType: voteType })
                 });
                 const result = await response.json();
+
                 if (response.ok && result.success) {
-                    showNotification(`🟢 Статусът на Сигнал №${id} бе успешно обновен на "${newStatus}"!`, 'success');
-                    loadPublicSignals(); // Презареждаме пиновете
+                    // Активираме защитата в localStorage за това ID
+                    localStorage.setItem(`voted_signal_${id}`, 'true');
+                    showNotification(`🗳️ ${result.message}`, 'success');
+                    
+                    // Презареждаме картата, за да се отразят веднага новите бройки и статуси
+                    loadPublicSignals();
                 } else {
-                    showNotification(`❌ Неуспешно обновяване: ${result.error || 'Грешка в сървъра'}`, 'error');
+                    showNotification(`❌ Грешка при гласуване: ${result.error}`, 'error');
                 }
             } catch (err) {
-                showNotification('❌ Мрежова грешка при обновяване на статуса.', 'error');
+                showNotification('❌ Срив в мрежата при изпращане на вота.', 'error');
             }
         }
 
-        // Зареждане на маркерите с динамични интерфейси
+        // Зареждане на маркерите
         async function loadPublicSignals() {
             try {
                 map.eachLayer(function (layer) {
-                    if (layer instanceof L.Marker && layer !== userMarker) {
-                        map.removeLayer(layer);
-                    }
+                    if (layer instanceof L.Marker && layer !== userMarker) { map.removeLayer(layer); }
                 });
 
                 const res = await fetch('/api/get-signals');
                 const result = await res.json();
                 
                 if (result.success && result.data) {
-                    // Дефиниране на иконите на Leaflet
                     const activeIcon = L.divIcon({
-                        className: 'pulse-marker',
-                        html: '<div class="pulse-dot"></div>',
+                        className: 'pulse-marker', html: '<div class="pulse-dot"></div>',
                         iconSize: [20, 20], iconAnchor: [10, 10], popupAnchor: [0, -10]
                     });
 
                     const resolvedIcon = L.divIcon({
-                        className: 'resolved-marker',
-                        html: '<div class="resolved-dot"></div>',
+                        className: 'resolved-marker', html: '<div class="resolved-dot"></div>',
                         iconSize: [20, 20], iconAnchor: [10, 10], popupAnchor: [0, -10]
                     });
 
                     result.data.forEach(signal => {
                         if (signal.latitude && signal.longitude) {
-                            const isResolved = signal.status === 'Разрешен';
+                            const isResolved = signal.status === 'Разрешен от граждани' || signal.status === 'Разрешен';
                             const markerIcon = isResolved ? resolvedIcon : activeIcon;
 
                             const marker = L.marker([signal.latitude, signal.longitude], { icon: markerIcon }).addTo(map);
                             
-                            // Интегриран административен мини-панел в балончето на сигнала
+                            // Проверяваме дали текущият браузър вече е гласувал за това ID
+                            const hasVoted = localStorage.getItem(`voted_signal_${signal.id}`);
+
+                            // Показваме бутоните само ако сигналът е активен и потребителят не е гласувал още
+                            const votingSection = (isResolved || hasVoted) 
+                                ? `<p class="text-[10px] text-center pt-1 font-semibold text-slate-400 italic">
+                                     ${isResolved ? '✅ Проблемът е окончателно разрешен!' : '✓ Вие вече гласувахте за този сигнал.'}
+                                   </p>`
+                                : `<div class="pt-2 border-t border-slate-100 space-y-1">
+                                        <p class="text-[10px] font-bold text-slate-500 text-center">Проблемът все още ли е там?</p>
+                                        <div class="flex space-x-1">
+                                            <button onclick="voteSignal(${signal.id}, 'still_there')" class="w-1/2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-1 rounded text-[9px] cursor-pointer transition">👍 Още е там</button>
+                                            <button onclick="voteSignal(${signal.id}, 'fixed')" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-1 rounded text-[9px] cursor-pointer transition">✅ Оправен е</button>
+                                        </div>
+                                   </div>`;
+
                             const popupContent = `
-                                <div class="font-sans text-xs p-1 space-y-2 max-w-[210px]">
+                                <div class="font-sans text-xs p-1 space-y-1.5 max-w-[210px]">
                                     <div class="flex justify-between items-center border-b border-slate-100 pb-1">
                                         <span class="font-extrabold text-indigo-950">Сигнал №${signal.id}</span>
                                         <span class="text-[9px] uppercase font-bold text-slate-400">${signal.priority || 'Нормален'}</span>
                                     </div>
                                     <p class="text-slate-700 font-medium leading-relaxed">${signal.corrected_text || 'Няма описание'}</p>
                                     <div class="text-[10px] text-slate-500">🏢 ${signal.assigned_institution || 'Община Пловдив'}</div>
-                                    <div class="px-2 py-1 ${isResolved ? 'bg-emerald-50 text-emerald-800 border-emerald-200/50' : 'bg-amber-50 text-amber-800 border-amber-200/50'} border rounded-lg text-center font-bold text-[10px]">
-                                        Текущ статус: ${signal.status}
+                                    
+                                    <div class="px-2 py-0.5 ${isResolved ? 'bg-emerald-50 text-emerald-800 border-emerald-200/50' : 'bg-amber-50 text-amber-800 border-amber-200/50'} border rounded-lg text-center font-bold text-[10px]">
+                                        Статус: ${signal.status}
                                     </div>
-                                    <div class="pt-1.5 border-t border-slate-100 flex items-center space-x-1">
-                                        <select id="popSelect-${signal.id}" class="bg-slate-50 border border-slate-200 rounded p-1 text-[10px] focus:outline-none w-full font-medium">
-                                            <option value="В процес" ${signal.status === 'В процес' ? 'selected' : ''}>В процес</option>
-                                            <option value="Разрешен" ${signal.status === 'Разрешен' ? 'selected' : ''}>Разрешен</option>
-                                            <option value="Отклонен" ${signal.status === 'Отклонен' ? 'selected' : ''}>Отклонен</option>
-                                        </select>
-                                        <button onclick="updateSignalStatus(${signal.id}, document.getElementById('popSelect-${signal.id}').value)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold p-1 px-1.5 rounded text-[10px] cursor-pointer">OK</button>
+
+                                    <div class="flex justify-between text-[9px] text-slate-400 font-medium px-0.5">
+                                        <span>🔎 Активен: <b>${signal.votes_still_there || 0}</b></span>
+                                        <span>Поправен: <b>${signal.votes_fixed || 0}/3</b></span>
                                     </div>
+                                    
+                                    ${votingSection}
                                 </div>
                             `;
                             marker.bindPopup(popupContent);
@@ -389,7 +392,7 @@
                     });
                 }
             } catch (err) {
-                console.error("Грешка при визуализиране на маркерите:", err);
+                console.error("Грешка при зареждане на маркерите:", err);
             }
         }
 
@@ -398,18 +401,11 @@
         // Изпращане на формата за нов сигнал
         document.getElementById('signalForm').addEventListener('submit', async function(event) {
             event.preventDefault();
-
             const submitButton = this.querySelector('button[type="submit"]');
             const originalButtonText = submitButton.innerHTML;
             
             submitButton.disabled = true;
-            submitButton.innerHTML = `
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>⏳ AI обработва документа по АПК...</span>
-            `;
+            submitButton.innerHTML = `<span>⏳ AI обработва документа по АПК...</span>`;
 
             const formData = {
                 citizenName: document.getElementById('citizenName').value.trim(),
@@ -427,21 +423,17 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
-
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showNotification(`🎉 <strong>Успех!</strong> Сигналът ви е заведен под <strong>ID №${result.data.id}</strong> и е изпратен към <strong>${result.data.assigned_institution}</strong>.`, 'success');
+                    showNotification(`🎉 <strong>Успех!</strong> Сигналът ви е заведен под <strong>ID №${result.data.id}</strong>.`, 'success');
                     
                     const letterContainer = document.getElementById('officialLetterContainer');
                     const letterText = document.getElementById('officialLetterText');
                     if (letterContainer && letterText && result.data.official_letter) {
                         letterText.textContent = result.data.official_letter;
                         letterContainer.classList.remove('hidden');
-                        setTimeout(() => {
-                            letterContainer.classList.remove('scale-95', 'opacity-0');
-                            letterContainer.classList.add('scale-100', 'opacity-100');
-                        }, 50);
+                        setTimeout(() => { letterContainer.classList.remove('scale-95', 'opacity-0'); letterContainer.classList.add('scale-100', 'opacity-100'); }, 50);
                     }
 
                     this.reset();
@@ -459,11 +451,10 @@
             }
         });
 
-        // Проследяване на статус по ID
+        // Бързо проследяване по ID през Bento кутията
         async function trackSignal() {
             const idInput = document.getElementById('searchSignalId').value.trim();
             const resultDiv = document.getElementById('trackResult');
-            
             if(!idInput) { showNotification("Моля, въведете номер на сигнал в полето за търсене.", "error"); return; }
 
             resultDiv.classList.remove('hidden');
@@ -476,7 +467,7 @@
                 if (result.success) {
                     const found = result.data.find(s => s.id == idInput);
                     if(found) {
-                        const isRes = found.status === 'Разрешен';
+                        const isRes = found.status === 'Разрешен от граждани' || found.status === 'Разрешен';
                         resultDiv.innerHTML = `
                             <div class="font-bold border-b border-amber-200/60 pb-1.5 mb-1.5 text-amber-950 flex justify-between items-center">
                                 <span>Резултат за Сигнал №${found.id}:</span>
