@@ -7,6 +7,11 @@ export default async function handler(request, response) {
   response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // 🎯 Предотвратяване на кеширането на ниво браузър и мрежа
+  response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  response.setHeader('Pragma', 'no-cache');
+  response.setHeader('Expires', '0');
+
   if (request.method === 'OPTIONS') {
     return response.status(200).end();
   }
@@ -19,10 +24,10 @@ export default async function handler(request, response) {
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
     // Взимаме сигналите. Селектираме само публичните полета + колоните за вот!
-    // Скриваме трите имена, телефона и имейла на гражданите!
+    // 🛠️ Добавено: updated_at, за да може фронтендът да изчисли точно 48-те часа от момента на поправянето!
     const { data, error } = await supabase
       .from('signals')
-      .select('id, created_at, corrected_text, location, assigned_institution, priority, status, image_url, latitude, longitude, votes_still_there, votes_fixed')
+      .select('id, created_at, updated_at, corrected_text, location, assigned_institution, priority, status, image_url, latitude, longitude, votes_still_there, votes_fixed')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
