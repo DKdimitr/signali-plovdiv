@@ -1,8 +1,9 @@
-// Конфигурирай твоя supabase клиент най-отгоре (както си го направил досега)
+// File: /api/vote-signals.js
 import { createClient } from '@supabase/supabase-js';
 
+// 🔑 ИЗПОЛЗВАМЕ SERVICE_ROLE_KEY, за да може бекендът безопасно да прескача RLS защитите при ъпдейт на статус!
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
@@ -55,7 +56,7 @@ export default async function handler(req, res) {
             }
         }
 
-        // 5. Обновяваме данните в Supabase
+        // 5. Обновяваме данните в Supabase (сега вече успешно, благодарение на service_role ключа)
         const { data: updatedData, error: updateError } = await supabase
             .from('signals')
             .update({ 
@@ -74,7 +75,9 @@ export default async function handler(req, res) {
         // 6. Връщаме детайлен отговор към фронт-енда
         return res.status(200).json({
             success: true,
-            message: 'Гласът Ви бе успешно отчетен!',
+            message: updatedVotesFixed >= 3 
+                ? 'Благодарим Ви! Сигналът беше затворен успешно от гражданите.' 
+                : 'Гласът Ви бе успешно отчетен!',
             current_status: newStatus,
             votes_fixed: updatedVotesFixed,
             votes_still_there: updatedVotesStillThere
@@ -82,6 +85,6 @@ export default async function handler(req, res) {
 
     } catch (err) {
         console.error('Грешка при краудсорсинг гласуване:', err);
-        return res.status(500).json({ success: false, error: 'Вътрешна сървърна грешка.' });
+        return res.status(500).json({ success: false, error: 'Вътрешна сървърна грешка при обработка на вота.' });
     }
 }
