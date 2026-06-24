@@ -357,8 +357,26 @@
                     result.data.forEach(signal => {
                         if (signal.latitude && signal.longitude) {
                             const isResolved = signal.status === 'Разрешен от граждани' || signal.status === 'Разрешен';
-                            const markerIcon = isResolved ? resolvedIcon : activeIcon;
+                            
+                            // ⏳ ЛОГИКА ЗА 48 ЧАСА ОТ МОМЕНТА НА ПОПРАВЯНЕТО
+                            if (isResolved) {
+                                // Използваме системната колона updated_at на Supabase. 
+                                // Ако по някаква причина тя липсва или е празна, превключваме към created_at като резервен вариант.
+                                const lastTimeChanged = signal.updated_at || signal.created_at;
+                                
+                                if (lastTimeChanged) {
+                                    const resolvedTime = new Date(lastTimeChanged).getTime();
+                                    const currentTime = Date.now();
+                                    const fortyEightHoursInMs = 48 * 60 * 60 * 1000; // 48 часа в милисекунди
 
+                                    // Ако от последния ъпдейт (поправянето) са минали повече от 48 часа, скриваме сигнала
+                                    if (currentTime - resolvedTime > fortyEightHoursInMs) {
+                                        return; // Прескачаме и не го чертаем на картата
+                                    }
+                                }
+                            }
+
+                            const markerIcon = isResolved ? resolvedIcon : activeIcon;
                             const marker = L.marker([signal.latitude, signal.longitude], { icon: markerIcon }).addTo(map);
                             
                             // Проверяваме дали текущият браузър вече е гласувал за това ID
