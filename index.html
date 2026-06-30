@@ -335,19 +335,58 @@
             }
         });
 
-        // Карта и Leaflet Логика
-        const map = L.map('map', { 
-            scrollWheelZoom: true,
-            fullscreenControl: true
-        }).setView([42.14492, 24.75032], 13);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+// Карта и Leaflet Логика
+const map = L.map('map', { 
+    scrollWheelZoom: true,
+    fullscreenControl: true
+}).setView([42.14492, 24.75032], 13);
 
-        // НОВО: Инициализация на клъстерната група за маркери и добавянето ѝ към картата
-        const markerClusterGroup = L.markerClusterGroup();
-        map.addLayer(markerClusterGroup);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// ОБНОВЕНА ЛОГИКА: Персонализирана функция за създаване на изцяло ЧЕРВЕНИ клъстери
+const markerClusterGroup = L.markerClusterGroup({
+    iconCreateFunction: function(cluster) {
+        const childCount = cluster.getChildCount();
+        
+        // Връщаме HTML структура, която наподобява твоя дизайн, но с цифрата на броя сигнали вътре
+        return L.divIcon({ 
+            html: `
+                <div style="
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    width: 40px; 
+                    height: 40px; 
+                    background-color: rgba(239, 68, 68, 0.4); 
+                    border-radius: 50%;
+                ">
+                    <div style="
+                        width: 28px; 
+                        height: 28px; 
+                        background-color: #ef4444; 
+                        border-radius: 50%; 
+                        border: 2px solid white; 
+                        box-shadow: 0 0 8px rgba(239, 68, 68, 0.8); 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                        color: white; 
+                        font-family: sans-serif; 
+                        font-weight: bold; 
+                        font-size: 12px;
+                    ">
+                        ${childCount}
+                    </div>
+                </div>
+            `, 
+            className: 'custom-red-cluster', 
+            iconSize: L.point(40, 40) 
+        });
+    }
+});
+map.addLayer(markerClusterGroup);
 
         let userMarker = null;
 
