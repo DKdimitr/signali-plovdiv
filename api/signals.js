@@ -268,7 +268,7 @@ export default async function handler(request, response) {
         });
 
         // 2. ИМЕЙЛ ДО СЪОТВЕТНАТА ИНСТИТУЦИЯ (СЪС СПАСИТЕЛНИЯ REPlY_TO)
-        const targetEmail = 'signali@plovdiv.bg'; // Тестов официален адрес на Общината
+        const targetEmail = 'dkbusiness901@gmail.com'; // Тестов официален адрес на Общината
 
         await resend.emails.send({
           from: `${citizenName} (през Сигнали Пловдив) <onboarding@resend.dev>`, 
