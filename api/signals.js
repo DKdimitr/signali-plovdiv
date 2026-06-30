@@ -1,9 +1,11 @@
 // File: /api/signals.js
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Resend } from 'resend'; // Импортираме новата библиотека за имейли
 
 // Инициализираме AI извън handler-а
 const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY); // Инициализация на Resend
 
 async function getRequestBody(req) {
   if (req.body) return req.body;
@@ -37,7 +39,7 @@ export default async function handler(request, response) {
     }
 
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      throw new Error("Липсват конфигурационни ключове за Supabase във Vercel.");
+      throw new Error("Липсват конфигурационни ключове for Supabase във Vercel.");
     }
 
     // Инициализираме модела със строги системни инструкции
@@ -113,7 +115,7 @@ export default async function handler(request, response) {
     // ==========================================
     // АВТОМАТИЧНО ГЕОКОДИРАНЕ ЧРЕЗ OPENSTREETMAP (NOMINATIM)
     // ==========================================
-let finalLat = body.latitude;
+    let finalLat = body.latitude;
     let finalLng = body.longitude;
 
     // Ако потребителят НЕ е цъкнал на картата, но Gemini е извлякъл текстов адрес
@@ -229,7 +231,85 @@ let finalLat = body.latitude;
       }
 
       const insertedData = await supabaseResponse.json();
-      return response.status(200).json({ success: true, data: insertedData[0] });
+      const insertedSignal = insertedData[0];
+
+      // =========================================================================
+      // БЛОК: АВТОМАТИЧНО ИЗПРАЩАНЕ НА ИМЕЙЛИ ЧРЕЗ RESEND С СУПЕР ЗАЩИТА
+      // =========================================================================
+      try {
+        const signalId = insertedSignal ? insertedSignal.id : "Няма ID";
+        
+        // 1. ИМЕЙЛ ДО ГРАЖДАНИНА (ПОТВЪРЖДЕНИЕ)
+        await resend.emails.send({
+          from: 'Сигнали Пловдив <onboarding@resend.dev>', // Смени с официален мейл след покупка на домейн
+          to: [citizenEmail],
+          subject: `🚨 Сигнал №${signalId} е успешно регистриран - Сигнали Пловдив`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; color: #334155; line-height: 1.6;">
+              <h2 style="color: #1e1b4b; margin-bottom: 5px;">Здравейте, ${citizenName}!</h2>
+              <p style="margin-top: 0;">Благодарим Ви за активната гражданска позиция.</p>
+              <p>Вашият сигнал беше успешно заведен под <strong>№${signalId}</strong> в градската система и беше изпратен към съответната институция по служебен път.</p>
+              
+              <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #4f46e5; margin: 20px 0; border-radius: 4px;">
+                <h4 style="margin-top: 0; color: #4f46e5; margin-bottom: 5px;">Вашето описание:</h4>
+                <p style="font-style: italic; margin-bottom: 0; color: #475569;">"${rawDescription}"</p>
+              </div>
+
+              <p>Платформата преформатира сигнала Ви в правно-юридически документ съобразно изискванията на <strong>чл. 107-111 от Административнопроцесуарния кодекс (АПК)</strong>.</p>
+              
+              <h4 style="color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-top: 25px;">Генериран документ към Общината:</h4>
+              <pre style="background-color: #f1f5f9; padding: 12px; border-radius: 6px; font-size: 11px; font-family: monospace; white-space: pre-wrap; color: #1e293b;">${structuredData.official_letter}</pre>
+              
+              <p style="font-size: 11px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                Това е автоматично системно съобщение от Гражданския инкубатор "Сигнали Пловдив". Моля, не отговаряйте директно на този имейл.
+              </p>
+            </div>
+          `
+        });
+
+        // 2. ИМЕЙЛ ДО СЪОТВЕТНАТА ИНСТИТУЦИЯ (СЪС СПАСИТЕЛНИЯ REPlY_TO)
+        const targetEmail = 'signali@plovdiv.bg'; // Тестов официален адрес на Общината
+
+        await resend.emails.send({
+          from: `${citizenName} (през Сигнали Пловдив) <onboarding@resend.dev>`, 
+          to: [targetEmail],
+          
+          // КЛЮЧОВИЯТ МОМЕНТ: Ако общината натисне "Отговор/Reply", писмото отива при гражданина!
+          reply_to: citizenEmail,
+          
+          subject: `🚨 Официален Сигнал по АПК №${signalId} [Приоритет: ${structuredData.priority}]`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 650px; color: #1e293b; line-height: 1.6;">
+              <p><strong>УВАЖАЕМИ ДАМИ И ГОСПОДА,</strong></p>
+              <p>По реда на <strong>Глава Осма (чл. 107-111) от Административнопроцесуарния кодекс (АПК)</strong>, Ви изпращаме заведен електронен граждански сигнал за градска неизправност в град Пловдив.</p>
+              
+              <div style="background-color: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin: 20px 0;">
+                <strong style="color: #0f172a;">Официални данни за контакт с подателя:</strong><br>
+                👤 Три имена: ${citizenName}<br>
+                ✉️ Имейл адрес: <a href="mailto:${citizenEmail}">${citizenEmail}</a><br>
+                📞 Телефон за връзка: ${citizenPhone || 'Не е предоставен'}<br>
+                📍 Локация по ИИ: ${structuredData.location}
+              </div>
+
+              <h3 style="color: #0f172a; margin-top: 20px; border-bottom: 2px solid #cbd5e1; padding-bottom: 4px;">ПРАВЕН ТЕКСТ НА ЖАЛБАТА:</h3>
+              <pre style="background: #f1f5f9; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; font-size: 12px; color: #0f172a; border: 1px solid #e2e8f0;">${structuredData.official_letter}</pre>
+              
+              ${imageUrl ? `<p style="margin-top: 15px;">🖼️ <strong>Приложено фотодоказателство:</strong> <a href="${imageUrl}" target="_blank" style="color: #2563eb; font-weight: bold;">Виж снимката тук</a></p>` : ''}
+              
+              <p style="background-color: #fffbeb; border: 1px solid #fde68a; padding: 10px; border-radius: 6px; font-size: 11px; color: #78350f; margin-top: 25px;">
+                ℹ️ <strong>Инструкция за администратора:</strong> Настоящото писмо е изпратено от автоматизирания портал за граждански контрол. Моля, използвайте бутона <strong>"Отговори" (Reply)</strong> на Вашата пощенска кутия, за да влезете в директен контакт с подателя на неговия личен имейл.
+              </p>
+            </div>
+          `
+        });
+
+        console.log(`Имейлите за Сигнал №${signalId} бяха изпратени успешно през Resend.`);
+      } catch (emailError) {
+        console.error("Критичен срив в подсистемата за имейли на Resend:", emailError);
+      }
+      // =========================================================================
+
+      return response.status(200).json({ success: true, data: insertedSignal });
 
     } catch (supabaseRestError) {
       console.error('ПОДРОБНА ДИАГНОСТИКА НА МРЕЖАТА:', {
