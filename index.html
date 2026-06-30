@@ -7,8 +7,12 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.fullscreen/1.4.2/Control.FullScreen.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.fullscreen/1.4.2/Control.FullScreen.min.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <style>
         body { background-color: #f8fafc; }
         #map { z-index: 10; }
@@ -295,7 +299,7 @@
 
                 <div class="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/50">
                     <h4 class="font-bold text-slate-900 mb-1 flex items-center gap-1.5 text-emerald-950">⏳ Защо решените сигнали изчезват след 48 часа?</h4>
-                    <p>Когато вие (като автор) или 3-ма независими граждани потвърдят, че ремонтът е извършен, сигналът светва в <b>зелено</b>. Той остава видим на картата точно 48 часа, за да послужи като доказателство за успешния граждански контрол, след което автоматично се скрива. Така поддържаме картата на Пловдив актуална.</p>
+                    <p>Когато вие (као автор) или 3-ма независими граждани потвърдят, че ремонтът е извършен, сигналът светва в <b>зелено</b>. Той остава видим на картата точно 48 часа, за да послужи като доказателство за успешния граждански контрол, след което автоматично се скрива. Така поддържаме картата на Пловдив актуална.</p>
                 </div>
             </div>
 
@@ -332,14 +336,18 @@
         });
 
         // Карта и Leaflet Логика
-       const map = L.map('map', { 
-    scrollWheelZoom: true,
-    fullscreenControl: true
-}).setView([42.14492, 24.75032], 13);
+        const map = L.map('map', { 
+            scrollWheelZoom: true,
+            fullscreenControl: true
+        }).setView([42.14492, 24.75032], 13);
         
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
+
+        // НОВО: Инициализация на клъстерната група за маркери и добавянето ѝ към картата
+        const markerClusterGroup = L.markerClusterGroup();
+        map.addLayer(markerClusterGroup);
 
         let userMarker = null;
 
@@ -428,11 +436,8 @@
 
         async function loadPublicSignals() {
             try {
-                map.eachLayer(function (layer) {
-                    if (layer instanceof L.Marker && layer !== userMarker) { 
-                        map.removeLayer(layer); 
-                    }
-                });
+                // НОВО: Изчистване на слоевете в клъстерната група, вместо директно от картата
+                markerClusterGroup.clearLayers();
 
                 const res = await fetch('/api/get-signals');
                 const result = await res.json();
@@ -466,7 +471,9 @@
                             }
 
                             const markerIcon = isResolved ? resolvedIcon : activeIcon;
-                            const marker = L.marker([signal.latitude, signal.longitude], { icon: markerIcon }).addTo(map);
+                            
+                            // НОВО: Създаваме маркера без .addTo(map)
+                            const marker = L.marker([signal.latitude, signal.longitude], { icon: markerIcon });
                             const hasVoted = localStorage.getItem(`voted_signal_${signal.id}`);
 
                             const votingSection = (isResolved || hasVoted) 
@@ -503,6 +510,9 @@
                                 </div>
                             `;
                             marker.bindPopup(popupContent);
+                            
+                            // НОВО: Добавяне на маркера към клъстерната група
+                            markerClusterGroup.addLayer(marker);
                         }
                     });
                 }
