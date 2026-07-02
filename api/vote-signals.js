@@ -6,25 +6,49 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Сигурна помощна функция за правилно четене на POST тялото във Vercel
+async function getRequestBody(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (req.body && typeof req.body === 'string') return JSON.parse(req.body);
+  
+  const buffers = [];
+  for await (const chunk of req) {
+    buffers.push(chunk);
+  }
+  const data = Buffer.concat(buffers).toString();
+  return data ? JSON.parse(data) : {};
+}
+
 export default async function handler(req, res) {
+  // Добавяме CORS хедъри за безпроблемна работа с фронтенда
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // 1. Позволяваме САМО POST заявки (еквивалентно на app.post)
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Методът не е разрешен.' });
   }
 
-  const { id, voteType, token } = req.body; // Приемаме и токен от тялото на заявката
-
-  // 2. Валидация на входните данни
-  if (!id || !voteType) {
-    return res.status(400).json({ success: false, error: 'Липсва ID на сигнала или тип глас.' });
-  }
-
-  // ДОБАВЕНО: Разрешаваме и новия тип вотинг от автора на сигнала
-  if (voteType !== 'still_there' && voteType !== 'fixed' && voteType !== 'resolve_by_owner') {
-    return res.status(400).json({ success: false, error: 'Невалиден тип гласуване.' });
-  }
-
   try {
+    // Прочитаме сигурно тялото на заявката
+    const body = await getRequestBody(req);
+    const { id, voteType, token } = body; 
+
+    // 2. Валидация на входните данни
+    if (!id || !voteType) {
+      return res.status(400).json({ success: false, error: 'Липсва ID на сигнала или тип глас.' });
+    }
+
+    // Разрешаваме и новия тип вотинг от автора на сигнала
+    if (voteType !== 'still_there' && voteType !== 'fixed' && voteType !== 'resolve_by_owner') {
+      return res.status(400).json({ success: false, error: 'Невалиден тип гласуване.' });
+    }
+
     // =========================================================================
     // НОВА ХЕНДЛЪР ЛОГИКА: ДИРЕКТНО ЗАТВАРЯНЕ ОТ СОБСТВЕНИКА НА СИГНАЛА
     // =========================================================================
@@ -36,7 +60,7 @@ export default async function handler(req, res) {
       // Вземаме сигнала от Supabase заедно с неговия таен owner_token
       const { data: existingSignal, error: fetchOwnerError } = await supabase
         .from('signals')
-        .select('owner_token')
+        .select('owner_token, votes_still_there')
         .eq('id', id)
         .single();
 
@@ -49,10 +73,14 @@ export default async function handler(req, res) {
         return res.status(403).json({ success: false, error: 'Грешен или невалиден токен за управление.' });
       }
 
-      // Обновяваме статуса директно без допълнителни гласувания
+      // Обновяваме статуса директно без допълнителни гласувания на 'Решен'
       const { error: updateOwnerError } = await supabase
         .from('signals')
-        .update({ status: 'Решен' })
+        .update({ 
+          status: 'Решен',
+          votes_fixed: 3, // Симулираме пълно одобрение за съвместимост с интерфейсите
+          votes_still_there: existingSignal.votes_still_there || 0
+        })
         .eq('id', id);
 
       if (updateOwnerError) throw updateOwnerError;
@@ -78,7 +106,7 @@ export default async function handler(req, res) {
     }
 
     if (signal.status === 'Решен') {
-      return res.status(400).json({ success: false, error: 'Този сигнал вече е маркиран като разрешен.' });
+      return res.status(400).json({ success: false, error: 'Този сигнал вече е маркиран като решен.' });
     }
 
     let updatedVotesStillThere = signal.votes_still_there || 0;
@@ -96,17 +124,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // 5. Обновяваме данните в Supabase (сега вече успешно, благодарение на service_role ключа)
-    const { data: updatedData, error: updateError } = await supabase
+    // 5. Обновяваме данните в Supabase
+    const { error: updateError } = await supabase
       .from('signals')
       .update({ 
         votes_still_there: updatedVotesStillThere,
         votes_fixed: updatedVotesFixed,
         status: newStatus
       })
-      .eq('id', id)
-      .select()
-      .single();
+      .eq('id', id);
 
     if (updateError) {
       throw updateError;
@@ -123,8 +149,8 @@ export default async function handler(req, res) {
       votes_still_there: updatedVotesStillThere
     });
 
-    } catch (err) {
-        console.error('Грешка при краудсорсинг гласуване:', err);
-        return res.status(500).json({ success: false, error: 'Вътрешна сървърна грешка при обработка на вота.' });
-    }
+  } catch (err) {
+    console.error('Грешка при краудсорсинг гласуване:', err);
+    return res.status(500).json({ success: false, error: 'Вътрешна сървърна грешка при обработка на вота.', details: err.message });
+  }
 }
