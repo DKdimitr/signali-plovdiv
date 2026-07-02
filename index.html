@@ -299,7 +299,7 @@
 
                 <div class="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/50">
                     <h4 class="font-bold text-slate-900 mb-1 flex items-center gap-1.5 text-emerald-950">⏳ Защо решените сигнали изчезват след 48 часа?</h4>
-                    <p>Когато вие (као автор) или 3-ма независими граждани потвърдят, че ремонтът е извършен, сигналът светва в <b>зелено</b>. Той остава видим на картата точно 48 часа, за да послужи като доказателство за успешния граждански контрол, след което автоматично се скрива. Така поддържаме картата на Пловдив актуална.</p>
+                    <p>Когато вие (като автор) или 3-ма независими граждани потвърдят, че ремонтът е извършен, сигналът светва в <b>зелено</b>. Той остава видим на картата точно 48 часа, за да послужи като доказателство за успешния граждански контрол, след което автоматично се скрива. Така поддържаме картата на Пловдив актуална.</p>
                 </div>
             </div>
 
@@ -312,7 +312,7 @@
     </div>
 
     <script>
-        // НОВО: JAVASCRIPT ФУНКЦИИ ЗА УПРАВЛЕНИЕ НА МОДАЛА
+        // NATIVE JAVASCRIPT ФУНКЦИИ ЗА УПРАВЛЕНИЕ НА МОДАЛА
         function toggleHowItWorksModal(show) {
             const modal = document.getElementById('howItWorksModal');
             if (show) {
@@ -350,7 +350,6 @@ const markerClusterGroup = L.markerClusterGroup({
     iconCreateFunction: function(cluster) {
         const childCount = cluster.getChildCount();
         
-        // Връщаме HTML структура, която наподобява твоя дизайн, но с цифрата на броя сигнали вътре
         return L.divIcon({ 
             html: `
                 <div style="
@@ -473,9 +472,45 @@ map.addLayer(markerClusterGroup);
             }
         }
 
+        // ДОБАВЕНО: Функция за директно и сигурно затваряне на сигнал от автора му (UX Подобрение №3)
+        async function closeSignalByOwner(id) {
+            const token = localStorage.getItem(`owner_token_signal_${id}`);
+            if (!token) {
+                alert('Нямате административни права (Token) за затваряне на този сигнал.');
+                return;
+            }
+
+            if (!confirm(`Сигурни ли сте, че искате да маркирате Сигнал №${id} като окончателно разрешен?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/close-signal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, token: token })
+                });
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showNotification(`🎉 Сигнал №${id} беше затворен успешно от Вас като негов автор!`, 'success');
+                    await loadPublicSignals();
+                    map.closePopup();
+                    
+                    // Обновяваме и справката в кутията за проследяване, ако е отворена
+                    if (document.getElementById('searchSignalId').value == id) {
+                        trackSignal();
+                    }
+                } else {
+                    showNotification(`❌ Неуспешно затваряне: ${result.error || 'Невалиден токен.'}`, 'error');
+                }
+            } catch (err) {
+                showNotification('❌ Мрежов срив при опит за прекратяване на сигнала.', 'error');
+            }
+        }
+
         async function loadPublicSignals() {
             try {
-                // НОВО: Изчистване на слоевете в клъстерната група, вместо директно от картата
                 markerClusterGroup.clearLayers();
 
                 const res = await fetch('/api/get-signals');
@@ -510,22 +545,35 @@ map.addLayer(markerClusterGroup);
                             }
 
                             const markerIcon = isResolved ? resolvedIcon : activeIcon;
-                            
-                            // НОВО: Създаваме маркера без .addTo(map)
                             const marker = L.marker([signal.latitude, signal.longitude], { icon: markerIcon });
                             const hasVoted = localStorage.getItem(`voted_signal_${signal.id}`);
+                            
+                            // ДОБАВЕНО: Проверка дали браузърът притежава собственически токен за този сигнал
+                            const isOwner = !!localStorage.getItem(`owner_token_signal_${signal.id}`);
 
-                            const votingSection = (isResolved || hasVoted) 
-                                ? `<p class="text-[10px] text-center pt-1 font-semibold text-slate-400 italic">
-                                     ${isResolved ? '✅ Проблемът е окончателно разрешен!' : '✓ Вие вече гласувахте за този сигнал.'}
-                                   </p>`
-                                : `<div class="pt-2 border-t border-slate-100 space-y-1">
+                            let votingSection = "";
+                            if (isResolved) {
+                                votingSection = `<p class="text-[10px] text-center pt-1 font-semibold text-slate-400 italic">✅ Проблемът е окончателно разрешен!</p>`;
+                            } else if (isOwner) {
+                                // ДОБАВЕНО UX ПОДОБРЕНИЕ: Ако е авторът, му се дава директен бутон за бързо приключване
+                                votingSection = `
+                                    <div class="pt-2 border-t border-slate-100 space-y-1">
+                                        <button onclick="closeSignalByOwner(${signal.id})" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-1 rounded text-[10px] cursor-pointer transition text-center shadow-sm">
+                                            ⚡ Затвори сигнала веднага
+                                        </button>
+                                    </div>`;
+                            } else if (hasVoted) {
+                                votingSection = `<p class="text-[10px] text-center pt-1 font-semibold text-slate-400 italic">✓ Вие вече гласувахте за този сигнал.</p>`;
+                            } else {
+                                votingSection = `
+                                    <div class="pt-2 border-t border-slate-100 space-y-1">
                                         <p class="text-[10px] font-bold text-slate-500 text-center">Проблемът все още ли е там?</p>
                                         <div class="flex space-x-1">
                                             <button onclick="voteSignal(${signal.id}, 'still_there')" class="w-1/2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-1 rounded text-[9px] cursor-pointer transition">👍 Още е там</button>
                                             <button onclick="voteSignal(${signal.id}, 'fixed')" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-1 rounded text-[9px] cursor-pointer transition">✅ Оправен е</button>
                                         </div>
-                                   </div>`;
+                                    </div>`;
+                            }
 
                             const popupContent = `
                                 <div class="font-sans text-xs p-1 space-y-1.5 max-w-[210px]">
@@ -549,8 +597,6 @@ map.addLayer(markerClusterGroup);
                                 </div>
                             `;
                             marker.bindPopup(popupContent);
-                            
-                            // НОВО: Добавяне на маркера към клъстерната група
                             markerClusterGroup.addLayer(marker);
                         }
                     });
@@ -591,6 +637,11 @@ map.addLayer(markerClusterGroup);
                 if (response.ok && result.success) {
                     showNotification(`🎉 <strong>Успех!</strong> Сигналът ви е заведен под <strong>ID №${result.data.id}</strong>.`, 'success');
                     
+                    // ДОБАВЕНО: Записваме токена в речника на Local Storage веднага при създаване на сигнала
+                    if (result.data && result.data.id && result.data.owner_token) {
+                        localStorage.setItem(`owner_token_signal_${result.data.id}`, result.data.owner_token);
+                    }
+
                     const letterContainer = document.getElementById('officialLetterContainer');
                     const letterText = document.getElementById('officialLetterText');
                     if (letterContainer && letterText && result.data.official_letter) {
@@ -630,6 +681,17 @@ map.addLayer(markerClusterGroup);
                     const found = result.data.find(s => s.id == idInput);
                     if(found) {
                         const isRes = found.status === 'Разрешен от граждани' || found.status === 'Разрешен';
+                        const isOwner = !!localStorage.getItem(`owner_token_signal_${found.id}`);
+                        
+                        // ДОБАВЕНО: Интегриране на бързия бутон за управление вътре в кутията за проследяване
+                        const trackingActionBtn = (!isRes && isOwner) 
+                            ? `<div class="pt-2 mt-1 border-t border-amber-200/40">
+                                   <button onclick="closeSignalByOwner(${found.id})" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-2 rounded text-[10px] cursor-pointer transition text-center shadow-sm">
+                                       ⚡ Прекрати & Затвори сигнала веднага
+                                   </button>
+                               </div>`
+                            : '';
+
                         resultDiv.innerHTML = `
                             <div class="font-bold border-b border-amber-200/60 pb-1.5 mb-1.5 text-amber-950 flex justify-between items-center">
                                 <span>Резултат за Сигнал №${found.id}:</span>
@@ -639,6 +701,7 @@ map.addLayer(markerClusterGroup);
                                 <div><b>Текущ Статус:</b> <span class="${isRes ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} px-2 py-0.5 rounded-md font-bold text-[11px]">${found.status}</span></div>
                                 <div><b>Определен Орган:</b> <span class="text-slate-800">${found.assigned_institution}</span></div>
                                 <div class="text-slate-400 text-[10px] pt-1 italic">Дата на регистрация: ${new Date(found.created_at).toLocaleDateString('bg-BG')}</div>
+                                ${trackingActionBtn}
                             </div>
                         `;
                     } else {
@@ -651,6 +714,36 @@ map.addLayer(markerClusterGroup);
                 resultDiv.innerHTML = "<div class='text-rose-700'>❌ Мрежова грешка при проверка на статуса.</div>";
             }
         }
+
+        // =========================================================================
+        // НОВ И КЛЮЧОВ UX БЛОК: URL ОБРАБОТКА, ИЗЧИСТВАНЕ И АВТОМАТИЧНО ФОКУСИРАНЕ
+        // =========================================================================
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const manageId = urlParams.get('manage');
+            const token = urlParams.get('token');
+
+            if (manageId && token) {
+                // Подобрение №1: Записваме токена в речника на Local Storage обвързан с ID-то
+                localStorage.setItem(`owner_token_signal_${manageId}`, token);
+
+                // Безшумно почистваме параметрите от адресната лента без презареждане на уеб страницата
+                const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+
+                // Подобрение №2: Автоматично насочваме гражданина, попълваме формата и активираме търсенето
+                const searchInput = document.getElementById('searchSignalId');
+                if (searchInput) {
+                    searchInput.value = manageId;
+                    // Изчакваме минимално за мрежова и Leaflet инициализация преди изпълнението
+                    setTimeout(() => {
+                        trackSignal();
+                        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 400);
+                }
+            }
+        });
+        // =========================================================================
     </script>
 </body>
 </html>
