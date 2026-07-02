@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Resend } from 'resend'; // Импортираме новата библиотека за имейли
+import crypto from 'crypto'; // ДОБАВЕНО: Модул за сигурно генериране на токени
 
 // Инициализираме AI извън handler-а
 const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -41,6 +42,9 @@ export default async function handler(request, response) {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
       throw new Error("Липсват конфигурационни ключове for Supabase във Vercel.");
     }
+
+        // ДОБАВЕНО: Генериране на уникален токен за автора
+    const ownerToken = crypto.randomUUID();
 
     // Инициализираме модела със строги системни инструкции
     const model = ai.getGenerativeModel({ 
@@ -208,7 +212,8 @@ export default async function handler(request, response) {
         
         // НОВИТЕ КОЛОНИ ЗА ГЕО-ЛОКАЦИЯ (АВТОМАТИЧНИ ИЛИ ОТ КАРТАТА):
         latitude: finalLat || null,
-        longitude: finalLng || null
+        longitude: finalLng || null,
+        owner_token: ownerToken // ДОБАВЕНО: Записваме токена в Supabase payload-а
       };
 
       console.log("Опит за директна HTTP заявка към:", `${supabaseUrl}/rest/v1/signals`);
@@ -238,7 +243,9 @@ export default async function handler(request, response) {
       // =========================================================================
       try {
         const signalId = insertedSignal ? insertedSignal.id : "Няма ID";
-        
+                // ДОБАВЕНО: Изграждане на Magic Link за управление
+        const magicLink = `https://signals-plovdiv.bg/?manage=${signalId}&token=${ownerToken}`;
+ 
         // 1. ИМЕЙЛ ДО ГРАЖДАНИНА (ПОТВЪРЖДЕНИЕ)
         await resend.emails.send({
           from: 'Сигнали Пловдив <onboarding@resend.dev>', // Смени с официален мейл след покупка на домейн
@@ -249,7 +256,13 @@ export default async function handler(request, response) {
               <h2 style="color: #1e1b4b; margin-bottom: 5px;">Здравейте, ${citizenName}!</h2>
               <p style="margin-top: 0;">Благодарим Ви за активната гражданска позиция.</p>
               <p>Вашият сигнал беше успешно заведен под <strong>№${signalId}</strong> в градската система и беше изпратен към съответната институция по служебен път.</p>
-              
+                            <div style="text-align: center; margin: 25px 0;">
+                <a href="${magicLink}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; font-size: 14px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                  ⚡ Управление и Затваряне на Сигнала
+                </a>
+                <p style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Използвайте този линк, ако проблемът бъде отстранен, за да го затворите веднага без чакане от всяко устройство.</p>
+              </div>
+
               <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #4f46e5; margin: 20px 0; border-radius: 4px;">
                 <h4 style="margin-top: 0; color: #4f46e5; margin-bottom: 5px;">Вашето описание:</h4>
                 <p style="font-style: italic; margin-bottom: 0; color: #475569;">"${rawDescription}"</p>
@@ -309,7 +322,14 @@ export default async function handler(request, response) {
       }
       // =========================================================================
 
-      return response.status(200).json({ success: true, data: insertedSignal });
+            // ДОБАВЕНО: Предаваме owner_token обратно в JSON обекта, за да може първото устройство да го запази веднага
+      return response.status(200).json({ 
+        success: true, 
+        data: {
+          ...insertedSignal,
+          owner_token: ownerToken
+        } 
+      });
 
     } catch (supabaseRestError) {
       console.error('ПОДРОБНА ДИАГНОСТИКА НА МРЕЖАТА:', {
