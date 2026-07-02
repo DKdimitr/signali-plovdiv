@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       // Обновяваме статуса директно без допълнителни гласувания
       const { error: updateOwnerError } = await supabase
         .from('signals')
-        .update({ status: 'Разрешен от граждани' })
+        .update({ status: 'Решен' })
         .eq('id', id);
 
       if (updateOwnerError) throw updateOwnerError;
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         success: true,
         message: 'Благодарим Ви! Вие затворихте Вашия сигнал успешно.',
-        current_status: 'Разрешен от граждани'
+        current_status: 'Решен'
       });
     }
 
@@ -77,7 +77,7 @@ export default async function handler(req, res) {
       throw fetchError;
     }
 
-    if (signal.status === 'Разрешен от граждани') {
+    if (signal.status === 'Решен') {
       return res.status(400).json({ success: false, error: 'Този сигнал вече е маркиран като разрешен.' });
     }
 
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
       
       // Ключовата бизнес логика: Ако стигнем 3 гласа "Оправен", затваряме сигнала!
       if (updatedVotesFixed >= 3) {
-        newStatus = 'Разрешен от граждани';
+        newStatus = 'Решен';
       }
     }
 
