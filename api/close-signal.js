@@ -1,12 +1,12 @@
 // File: /api/close-signal.js
 import { createClient } from '@supabase/supabase-js';
 
-// 🔑 ИЗПОЛЗВАМЕ SERVICE_ROLE_KEY, за да прескочим RLS защитите при ъпдейт
+// 🔑 ИЗПОЛЗВАМЕ SERVICE_ROLE_KEY, за да може бекендът безопасно да прескача RLS защитите при ъпдейт!
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Помощна функция за правилно четене на POST тялото във Vercel
+// Сигурна помощна функция за правилно четене на POST тялото във Vercel environments
 async function getRequestBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (req.body && typeof req.body === 'string') return JSON.parse(req.body);
@@ -20,7 +20,7 @@ async function getRequestBody(req) {
 }
 
 export default async function handler(req, res) {
-  // CORS хедъри за съвместимост
+  // CORS Хедъри за безпроблемна комуникация с фронтенда
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -29,6 +29,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // 1. Позволяваме САМО POST заявки
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Методът не е разрешен.' });
   }
@@ -37,11 +38,12 @@ export default async function handler(req, res) {
     const body = await getRequestBody(req);
     const { id, token } = body;
 
+    // 2. Валидация на входните данни
     if (!id || !token) {
       return res.status(400).json({ success: false, error: 'Липсва ID на сигнала или идентификационен токен.' });
     }
 
-    // 1. Вземаме пълния ред от базата
+    // 3. Вземаме сигнала от Supabase заедно с неговия таен owner_token
     const { data: existingSignal, error: fetchOwnerError } = await supabase
       .from('signals')
       .select('owner_token, votes_still_there')
@@ -52,17 +54,16 @@ export default async function handler(req, res) {
       return res.status(404).json({ success: false, error: 'Сигналът не е намерен.' });
     }
 
-    // 2. ВАЛИДАЦИЯ: Проверяваме съвпадението на токените
+    // 4. ВАЛИДАЦИЯ: Проверяваме съвпадението на токените
     if (existingSignal.owner_token !== token) {
       return res.status(403).json({ success: false, error: 'Грешен или невалиден токен за управление.' });
     }
 
-    // 3. Обновяваме статуса на 'Разрешен' (точно както е в констрейнта на Supabase)
-    // и симулираме нужните 3 гласа за съвместимост.
+    // 5. Обновяваме статуса на 'решен' (точно както изисква CHECK констрейнтът)
     const { error: updateOwnerError } = await supabase
       .from('signals')
       .update({ 
-        status: 'Разрешен',
+        status: 'решен', // Точната стойност от базата данни!
         votes_fixed: 3, 
         votes_still_there: existingSignal.votes_still_there || 0
       })
@@ -70,10 +71,11 @@ export default async function handler(req, res) {
 
     if (updateOwnerError) throw updateOwnerError;
 
+    // 6. Връщаме успешен отговор към фронтенда
     return res.status(200).json({
       success: true,
       message: 'Благодарим Ви! Вие затворихте Вашия сигнал успешно.',
-      current_status: 'Разрешен'
+      current_status: 'решен'
     });
 
   } catch (err) {
