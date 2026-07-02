@@ -59,11 +59,11 @@ export default async function handler(req, res) {
       return res.status(403).json({ success: false, error: 'Грешен или невалиден токен за управление.' });
     }
 
-    // 5. Обновяваме статуса на 'решен' (точно както изисква CHECK констрейнтът)
+    // 5. Обновяваме статуса на 'Решен' (точно както изисква твоят signals_status_check)
     const { error: updateOwnerError } = await supabase
       .from('signals')
       .update({ 
-        status: 'решен', // Точната стойност от базата данни!
+        status: 'Решен', // 🎯 ТОЧНО съвпадение с констрейнта ти!
         votes_fixed: 3, 
         votes_still_there: existingSignal.votes_still_there || 0
       })
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       message: 'Благодарим Ви! Вие затворихте Вашия сигнал успешно.',
-      current_status: 'решен'
+      current_status: 'Решен'
     });
 
   } catch (err) {
